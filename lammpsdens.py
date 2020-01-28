@@ -1,12 +1,12 @@
 #!/usr/bin/python3
-# readin lammps configuration
+# calculate density of types from lammps traj
 
 import sys
 import argparse
 import numpy
 import math
 import time
-
+import subprocess
 #------------------------------------------------------------
 def getlammpsbox(configname): # box in lammps traj
     f = open(configname,'r')
@@ -43,8 +43,21 @@ def getlammpsbox(configname): # box in lammps traj
     data = line.split()
     box[2] = float(data[1])-float(data[0])
 
+    f.close()
     return box
 
+#-----find number of configs (quicker with "wc" but not as portable) ------
+def getlammpsnconf(configname,natoms): 
+    lines = 0
+    print("Counting configures of ",configname)
+    blines = subprocess.check_output(["wc","-l",configname])
+    # lines = int((str(blines,'utf-8').split())[0])
+    lines = int((str(blines.decode()).split())[0])
+#    for line in open(configname): # above is 5* faster, but this always works
+#        lines += 1
+    nconf = int(lines/(natoms+9))
+    print ("# of configs = ",nconf)
+    return (nconf)
 #------------------------------------------------------------
 def getlammpstypes(configname,natoms): # find # types in lammps traj
     types={}
@@ -149,6 +162,22 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 # end readlammpsconfig
 
 #------------------------------------------------------------
+def savehist(outfile,hist,nconfig,hdr):
+    data = numpy.array(hist)
+    data[:,1:] /= nconfig # normalize all but first column
+    hdr1 = hdr + " nconfigs: " + str(nconfig)
+    numpy.savetxt(outfile,data,fmt='%g',header=hdr1)
+
+    # hist[:,1:] /= box[0]*box[1]*dx
+# average and normalize
+#for i in range(nbins):
+#    hist[i][0] = dx*i + hmin
+#    for j in range(1,ntypes+1):
+#        hist[i][j] /= nconfig
+# hist[i][j] /= types[j]
+# might want div by box[0]*box[1]*dx to norm density
+
+#------------------------------------------------------------
 # read command line arg using argparser
 parser = argparse.ArgumentParser(description="Read in Lammps trajectory file and calculate histogram of types along z")
 parser.add_argument('input', help='input lammpstrj file')
@@ -163,53 +192,61 @@ configname = args.input # 'test.lammpstrj'
 outfile = args.output
 itime = args.time
 
-print("Processing",configname)
+print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
 print("Number of atoms:",natoms)
 
 types = getlammpstypes(configname,natoms)
 ntypes =len(types.keys())
-print("Number of atoms types:",ntypes,types)
+print("Number of atom types:",ntypes,types)
 
 box = getlammpsbox(configname)
 print("Box dimensions = ",box)
+
+nconf = getlammpsnconf(configname,natoms)
 
 pos = numpy.zeros((natoms,3))
 atypes = numpy.zeros(natoms,dtype=int)
 hist = numpy.zeros((nbins,ntypes+1)) # types go from 1-n, 0 will be x
 hmin = 0 # min in the z (goes from 0 to z)
 dx = box[2]/nbins
+hist[:,0] = numpy.arange(hmin,dx*nbins+hmin,dx) # create bin values
 
+# create header for file
 hdr = ""
 for i in range(len(sys.argv)):
     hdr += " " + sys.argv[i]
-hdr += "," + str(dx) + " 0 " + str(box[2])
-for key in types.keys():
-    hdr += " " + str(key) + ":" + str(types[key])
+hdr += "\n dz = " + str(dx) + " box: " + str(box[0]) + " " + str(box[1]) + " " + str(box[2]) + " Types:" + str(ntypes)
+for k in sorted(types): # iterate over key, value pairs 
+    hdr += " " + str(k) + ":" + str(types[k])
 
 f = open(configname,'r')
 nconfig = 0  # read initial configuration
 tnow = time.time()
 ttime = tnow
+print("Processing ",configname)
 while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #print(natoms,box,pos,atypes)
     nconfig += 1
+    #abin = pos[:,2]/dx.astype(int)
     for i in range(natoms):
+        #ibin = abin[i]
         ibin = int(pos[i][2]/dx)
         #print(i,ibin,pos[i][2]/dx,pos[i][2])
+        if(ibin<0 or ibin>=nbins):
+            print("Warning: atom position out of range",i,ibin,pos[i][2]/dx,pos[i],box[2])
+            ibin = max(ibin,0)
+            ibin = min(ibin,nbins-1)
         hist[ibin][atypes[i]] += 1
-    if(itime < time.time()-tnow):
-        print('configs = {}, time={:g}'.format(nconfig,time.time()-ttime))
-        numpy.savetxt(outfile,hist,fmt='%g',header=hdr)
+
+    tnowi = time.time()
+    if(itime < tnowi-tnow):
+        runtime = tnowi-ttime
+        etime = runtime*nconf/nconfig
+        print('configs = {}/{} ~ {:2.1%}, time={:g}/{:g}'.format(nconfig,nconf,nconfig/nconf,runtime,etime))
+        savehist(outfile,hist,nconfig,hdr)
         tnow = time.time()
 
 print("# configs read in:",nconfig)
 #print(hist)
-
-# average and normalize
-for i in range(nbins):
-    hist[i][0] = dx*i + hmin
-    for j in range(1,ntypes+1):
-        hist[i][j] = hist[i][j]/(nconfig*types[j])
-        # might want div by box[0]*box[1]*dx to norm density
-numpy.savetxt(outfile,hist,fmt='%g',header=hdr)
+savehist(outfile,hist,nconfig,hdr)
