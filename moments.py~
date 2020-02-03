@@ -1,9 +1,0 @@
-#!/usr/bin/python3
-
-import scipy.stats
-import numpy
-import sys
-
-data = numpy.loadtxt(argv[0])
-
-print(data)

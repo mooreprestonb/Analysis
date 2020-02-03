@@ -217,6 +217,9 @@ for i in range(nbins):
         for k in range(j,ntypes):
             joff = ioff[j] + k
             histnorm[i][joff] = fact/(types[j+1]*types[k+1]*xpt*xpt)
+            if(j==k) :
+                histnorm[i][joff] *= 2.  # diagonal terms need a factor of 2
+                
 #print(histnorm)
 
 # create header for file
