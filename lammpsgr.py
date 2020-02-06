@@ -117,12 +117,12 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     line = f.readline() # natoms
     natms = int(line)
     if(natoms != natms):
-        print("ERROR! natoms can not change!",natoms,natms)
+        print("ERROR! natoms can not change!",natoms,natms," config",config)
         exit(1)
             
     line = f.readline() # read "ITEM: BOX BOUNDS pp pp pp"
     if (line.rstrip()[:16] != "ITEM: BOX BOUNDS"):
-        print("ERROR! 3rd line not \"ITEM: BOX BOUNDS pp pp pp\"")
+        print("ERROR! 5th line not \"ITEM: BOX BOUNDS pp pp pp\"")
         exit(1)
     line = f.readline() # xlo xhi
     data = line.split()
@@ -135,8 +135,13 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     box[2] = float(data[1])-float(data[0])
     
     line = f.readline() # read "ITEM: ATOMS id type xs ys zs" (scaled coord)
-    if (line.rstrip() != "ITEM: ATOMS id type xs ys zs"):
-        print("ERROR! 3rd line not \"ITEM: ATOMS id type xs ys zs\"")
+    if (line.rstrip() == "ITEM: ATOMS id type xs ys zs"):
+        ibox = 1
+    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"):
+        ibox = 2
+    else:
+        print("ERROR! 3th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
+        print("\"ITEM: ATOMS id type x y z ix iy iz\"")
         exit(1)
         
     # loop over atoms
@@ -144,9 +149,11 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
         line = f.readline()
         data = line.split()
         num = int(data[0])-1 # lammps id's start with 1
-        pos[num][0] = float(data[2])*box[0]
-        pos[num][1] = float(data[3])*box[1]
-        pos[num][2] = float(data[4])*box[2]
+        pos[num][0] = float(data[2])
+        pos[num][1] = float(data[3])
+        pos[num][2] = float(data[4])
+        if(ibox ==1):
+            pos[num] *= box
         if (config==0):
             atypes[num] = int(data[1])
         else:
@@ -197,16 +204,16 @@ nconf = getlammpsnconf(configname,natoms) # count configurations
 pos = numpy.zeros((natoms,3))
 atypes = numpy.zeros(natoms,dtype=int)
 ninter = int(ntypes*(ntypes-1)/2+ntypes)
-hist = numpy.zeros((nbins,ninter+1)) # types 0-0, 0-1 ... 0-n, 1-1.... 1-n, ... n-n
+hist = numpy.zeros((nbins,ninter+1)) # types 1-1, 1-2 ... 1-n, 2-2.... 2-n, ... n-n
 histnorm = numpy.zeros((nbins,ninter+1)) 
-dx = (rmax-rmin)/(nbins)
+dx = (rmax-rmin)/(nbins-1)
 hist[:,0] = numpy.arange(rmin,dx*nbins+rmin,dx) # create bin values
 
 ioff = numpy.zeros(ntypes,dtype=int)
 ioff[0] = 1
 for i in range(1,ntypes):
-    ioff[i] = ioff[i-1]+i
-print(ioff)
+    ioff[i] = ioff[i-1]+ntypes-i
+#print(ioff)
     
 # create norm array for historgram
 fact = 1./(4.*math.pi*dx)
@@ -217,10 +224,10 @@ for i in range(nbins):
         for k in range(j,ntypes):
             joff = ioff[j] + k
             histnorm[i][joff] = fact/(types[j+1]*types[k+1]*xpt*xpt)
+            # print(i,j,k,joff,fact,types[j+1],types[k+1],xpt)
             if(j==k) :
                 histnorm[i][joff] *= 2.  # diagonal terms need a factor of 2
-                
-#print(histnorm)
+#print(fact,histnorm[:2,:])
 
 # create header for file
 hdr = ""
@@ -229,7 +236,10 @@ for i in range(len(sys.argv)):
 hdr += "\n dz = " + str(dx) + " Types:" + str(ntypes)
 for k in sorted(types): # iterate over key, value pairs 
     hdr += " " + str(k) + ":" + str(types[k])
-
+hdr += "\n time "
+for j in range(ntypes):
+    for k in range(j,ntypes):
+        hdr += str(j+1) + "-" + str(k+1) + " " 
 f = open(configname,'r')
 nconfig = 0  # read initial configuration
 tnow = time.time()
@@ -253,8 +263,12 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         ibin = ((rdist-rmin)/dx).astype(int)
         for j in range(len(rdist)):
             if(ibin[j]>=0 and ibin[j]<nbins-1):
-                jn = min(atypes[i]-1,atypes[i+1+j]-1)
-                jm = max(atypes[i]-1,atypes[i+1+j]-1)
+                jn = atypes[i]-1
+                jm = atypes[i+1+j]-1
+                if(jn>jm): # make sure we are in correct values
+                    temp = jn
+                    jn = jm
+                    jm = temp
                 jbin = ioff[jn] + jm
                 hist[ibin[j]][jbin] += 1
                 #print(i,i+1+j,pos[i],pos[i+1+j],rdist[j],ibin[j],jbin,ntypes,jn,jm)
