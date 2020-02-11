@@ -270,7 +270,7 @@ histnorm[-1,1:] *= 2 # last value only is 1/2 volume so needs factor of 2
 hdr = ""
 for i in range(len(sys.argv)):
     hdr += " " + sys.argv[i]
-hdr += "\n dz = " + str(dx) + " Types:" + str(ntypes)
+hdr += "\n nbins="+ str(nbins) + ", min="+str(rmin) + ", max=" + str(rmax) + ", dr=" + str(dx) + "\n Types:" + str(ntypes)
 for k in sorted(types): # iterate over key, value pairs 
     hdr += " " + str(k) + ":" + str(types[k])
 hdr += "\n r "
@@ -322,6 +322,7 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
 avol = svol/nconfig
 stdvol = math.sqrt((svol2/nconfig - avol*avol))
 print("# configs read in:",nconfig," <vol> =",avol, "stdvol = ",stdvol)
+hdr += "\n <vol> " + str(avol) + " <(x-<x>)^2> = " + str(stdvol)
 histnorm[:,1:] *= avol/nconfig
 savehist(outfile,hist,nconfig,hdr,histnorm)
 

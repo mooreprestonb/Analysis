@@ -209,7 +209,7 @@ pos = numpy.zeros((natoms,3))
 atypes = numpy.zeros(natoms,dtype=int)
 hist = numpy.zeros((nbins,ntypes+1)) # types go from 1-n, 0 will be x
 hmin = 0 # min in the z (goes from 0 to z)
-dx = box[2]/nbins
+dx = box[2]/(nbins-1)
 hist[:,0] = numpy.arange(hmin,dx*nbins+hmin,dx) # create bin values
 
 # create header for file
@@ -231,13 +231,17 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #abin = pos[:,2]/dx.astype(int)
     for i in range(natoms):
         #ibin = abin[i]
-        ibin = int(pos[i][2]/dx)
+        pt = pos[i][2]/dx
+        ibin = int(pt)
         #print(i,ibin,pos[i][2]/dx,pos[i][2])
         if(ibin<0 or ibin>=nbins):
             print("Warning: atom position out of range",i,ibin,pos[i][2]/dx,pos[i],box[2])
             ibin = max(ibin,0)
             ibin = min(ibin,nbins-1)
-        hist[ibin][atypes[i]] += 1
+        fr = pt-ibin
+        hist[ibin  ][atypes[i]] += 1. - fr
+        hist[ibin+1][atypes[i]] += fr
+        #hist[ibin][atypes[i]] += 1
 
     tnowi = time.time()
     if(itime < tnowi-tnow):
