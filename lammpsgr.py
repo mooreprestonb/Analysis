@@ -246,7 +246,10 @@ dx = (rmax-rmin)/(nbins-1)
 #toff = int(ntypes*(ntypes-1)/2+ntypes)+1
 histnorm = numpy.zeros((nbins,toff)) 
 hist = numpy.zeros((nbins,toff)) # types 1-1, 1-2 ... 1-n, 2-2.... 2-n, ... n-n
-hist[:,0] = numpy.arange(rmin,dx*nbins+rmin,dx) # create bin values
+#hist[:,0] = numpy.arange(rmin,rmax,dx) # create bin values but can be off in rounding error so we do explicit.
+for i in range(nbins):
+    r = i*dx+rmin
+    hist[i][0] = r
 
 # create norm array for historgram
 fact = 1./(4.*math.pi*dx)
@@ -270,12 +273,12 @@ for i in range(len(sys.argv)):
 hdr += "\n dz = " + str(dx) + " Types:" + str(ntypes)
 for k in sorted(types): # iterate over key, value pairs 
     hdr += " " + str(k) + ":" + str(types[k])
-hdr += "\n time "
+hdr += "\n r "
 for p in pairs: # add pairs to header
     hdr += p+" "
 #
 f = open(configname,'r')
-nconfig = 0  # read initial configuration
+nconfig = 0  # 
 tnow = time.time()
 ttime = tnow
 svol = 0
