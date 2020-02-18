@@ -55,9 +55,3 @@ std3 = numpy.std(dens[intface[3]:-2])
 #print("phase 2 density: ",dens[interface1[-1]+3],dens[interface2[0]-1])
 #print("phase 3 density: ",dens[interface2[-1]+5],dens[-2])
 print(sys.argv[1],"AvgGas:",avg1,avg3," StdGas:",std1,std3,"AvgLiquid:",avg2,std2)
-
-
-#numpy.savetxt("hist.dat",numpy.column_stack((xhist,hist)))
-
-
-
