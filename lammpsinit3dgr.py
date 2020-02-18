@@ -1,10 +1,10 @@
 #!/usr/bin/python3
-# read lammps data and reorder...
+# read lammps data and create 3dgr for water
 
 import sys
 import re
 import argparse
-import numpy as np
+import numpy
 
 def indexline(al,value): # get line of value
     n = 0
@@ -23,9 +23,9 @@ def indexline(al,value): # get line of value
     return n
 #----------------------------
 
-parser = argparse.ArgumentParser(description="Reorder lammps init files")
+parser = argparse.ArgumentParser(description="Read lammps init files")
 parser.add_argument("infile",help="Lammps init file name to process")
-parser.add_argument("outfile",help="Lammps init output file to create")
+parser.add_argument("outfile",help="Lammps output 3dgr file to create")
 args = parser.parse_args()
 
 #lammpsfile = "lammps.test.init"
@@ -37,6 +37,17 @@ f = open(lammpsfile,"r")
 #lines = list(f)
 lines = f.readlines()
 f.close()
+
+Otype = 3
+Htype = 4
+
+#Grids
+nx = 50
+ny = 50
+nz = 50
+
+rmin = -10.0
+rmax =  10.0
 
 l=0
 #Find natoms
@@ -109,6 +120,8 @@ natm = -1
 atms = []
 indx = []
 gindx = []
+atmpos = []
+atype = []
 hl = 0
 nl = 0
 for x in lines:
@@ -124,135 +137,68 @@ for x in lines:
             atms.append(w) # atom line
             indx.append(int(w[0]))  # atom index
             gindx.append(int(w[1])) # group index
+            atmpos.append([float(w[4]),float(w[5]),float(w[6])])
+            atype.append(int(w[2]))
         if w[0] == "Atoms": # start counting Atoms!
             natm = 0
             hl = nl
 print("natoms found = ",natm)
-
 if (natm != natoms):  # error check
     print("Something wrong, natoms do not match", natm, " found !=", natoms)
     exit()
 
-#print atms
+delta = [(rmin-rmax)/nx,(rmin-rmax)/ny,(rmin-rmax)/nz]
+pos = numpy.array(atmpos)
 
-indxs = np.argsort(indx) # index to sort array
-gindxs = np.argsort(gindx) # group index to sort array
-sgindx = sorted(set(gindx)) # sorted group index
+oidx = [] # oxygen type index
+for i in range(natoms):
+    if atype[i] == Otype:
+        oidx.append(i)
 
-#print(indx, indxs)
-#print(gindx, sgindx)
+f = open("check.vmd","w")
+radius = .2
+f.write("mol new\n")
 
+nox = len(oidx)
+print(oidx)
+for i in oidx:
+    r1 = pos[i+1]-pos[i] # H1-O
+    r2 = pos[i+2]-pos[i] # H2-O
+    v1 = (r1+r2)
+    v1 /= numpy.linalg.norm(v1)
+    v2 = numpy.cross(v1,r1)
+    v2 /= numpy.linalg.norm(v2)
+    v3 = numpy.cross(v1,v2)
+    v3 /= numpy.linalg.norm(v3)
+    print(i,v1,v2,v3)
+    f.write("draw color red\n")
+    f.write("draw sphere {%f %f %f} radius %f\n" % (pos[i][0], pos[i][1], pos[i][2], radius))
+    f.write("draw color white\n")
+    f.write("draw sphere {%f %f %f} radius %f\n" % (pos[i+1][0], pos[i+1][1], pos[i+1][2], .5*radius))
+    f.write("draw sphere {%f %f %f} radius %f\n" % (pos[i+2][0], pos[i+2][1], pos[i+2][2], .5*radius))
+    f.write("draw color %d\n"%(1))
+    f.write("draw line {%f %f %f} {%f %f %f}\n" % (pos[i][0], pos[i][1], pos[i][2], pos[i][0]+v1[0], pos[i][1]+v1[1], pos[i][2]+v1[2]))
+    f.write("draw color %d\n"%(2))
+    f.write("draw line {%f %f %f} {%f %f %f}\n" % (pos[i][0], pos[i][1], pos[i][2], pos[i][0]+v2[0], pos[i][1]+v2[1], pos[i][2]+v2[2]))
+#    f.write("draw color %d\n"%(3))
+#    f.write("draw line {%f %f %f} {%f %f %f}\n" % (pos[i][0], pos[i][1], pos[i][2], pos[i][0]+v3[0], pos[i][1]+v3[1], pos[i][2]+v3[2]))
+    
 #open file to write
 print("Creating file :",ofile)
 f = open(ofile,"w")
 
 #print header
-for i in range(hl):
-    f.write(lines[i])
-f.write("\n")
+hdr = "# opendx file for testing with 3dgr\n"
+f.write(hdr)
+hdr = "object 1 class gridpositions counts "+str(nx)+" "+str(ny)+" "+str(nz)+"\n"
+f.write(hdr)
+hdr = "origin " + str(rmin) + " " + str(rmin) + " " + str(rmin) +"\n"
+f.write(hdr)
+hdr = "delta "+str(delta[0])+" 0 0\ndelta 0 "+str(delta[1])+" 0\ndelta 0 0 "+str(delta[2])+"\n"
+f.write(hdr)
+hdr = "object 2 class gridconnections counts "+str(nx)+" "+str(ny)+" "+str(nz)+"\n"
+f.write(hdr)
+hdr = "object 3 class array type double rank 0 items "+str(nx*ny*nz)+" data follows\n"
+f.write(hdr)
 print("Wrote header")
-
-# print renumbered atoms and groups
-ni = 0
-aridx = []  # get indexed array
-for i in indxs:
-    aridx.append(i); # indexed array.. could use dictionary
-    l = str(aridx.index(i)+1) + " " # index
-    igrp = sgindx.index(int(atms[i][1]))+1 # group
-    l += str(igrp) + " "
-    for w in atms[i][2:]: # rest of line
-        l += w + " "
-    f.write(l)
-    f.write("\n")
-    ni += 1
-f.write("\n")
-
-print(aridx)
-print("Wrote atoms with new index and group id's")
-
-# Now for other data
-nl = indexline(lines,"Atoms")
-vl = indexline(lines,"Velocities")
-bl = indexline(lines,"Bonds")
-al = indexline(lines,"Angles")
-dl = indexline(lines,"Diheadrals")
-il = indexline(lines,"Impropers")
-
-#print("Velocities")
-#print()
-#for i in range(vl+1,bl-1):
-#    w = lines[i].rstrip().split()
-#    # print(w)
-#    if w: # skip over blank lines
-#        ni = int(w[0])
-#        nn = aridx.index(indx.index(ni))+1
-#        l = str(nn) + " "
-#        for wds in w[1:]:
-#            l += wds + " "
-#        print(l)
-#print()
-
-f.write("Bonds\n\n")
-for i in range(bl+1,al-1):
-    w = lines[i].rstrip().split()
-    # print(w)
-    if w: # skip over blank lines
-        l = w[0] + " " + w[1] + " "
-        ni = int(w[2])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + " "
-        ni = int(w[3])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + "\n"
-        f.write(l) 
-f.write("\n")
-print("Wrote Bonds")
-
-f.write("Angles\n\n")
-for i in range(al+1,dl-1):
-    w = lines[i].rstrip().split()
-    # print(w)
-    if w: # skip over blank lines
-        l = w[0] + " " + w[1] + " "
-        ni = int(w[2])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + " "
-
-        ni = int(w[3]) 
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + " "
-        
-        ni = int(w[4])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + "\n"
-        
-        f.write(l) 
-f.write("\n")
-
-print("Wrote Angles")
-
-f.write("Dihedrals\n\n")
-for i in range(dl+1,len(lines)):
-    w = lines[i].rstrip().split()
-    # print(w)
-    if w: # skip over blank lines
-        l = w[0] + " " + w[1] + " "  # dihedral # and type
-
-        ni = int(w[2])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + " "
-
-        ni = int(w[3]) 
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + " "
-        
-        ni = int(w[4])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + " "
-
-        ni = int(w[5])
-        n1 = aridx.index(indx.index(ni))+1
-        l += str(n1) + "\n"
-
-        f.write(l)
-f.write("\n")
+exit(1)
