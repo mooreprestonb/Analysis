@@ -98,6 +98,34 @@ def getlammpsatoms(configname): # find # atoms in lammps header
     return(natms)
 
 #------------------------------------------------------------
+def getngrblist(configname): # find interacting atoms and types
+    f = open(configname,'r')
+
+    line = f.readline() # read header or EOF
+    if (line==""): # end of file! EOF!
+        print("EOF while reading header?!?")
+        return 0
+    if (line.rstrip() != "ITEM: TIMESTEP"):
+        print("ERROR! first line of config is not \"ITEM: TIMESTEP\"")
+        exit(1)
+    line = f.readline() # read timestep
+    ts = int(line)
+
+    line = f.readline() # read "ITEM: NUMBER OF ATOMS"
+    if (line.rstrip() != "ITEM: NUMBER OF ATOMS"):
+        print("ERROR! 3rd line of config is not \"ITEM: NUMBER OF ATOMS\"")
+        exit(1)
+    line = f.readline() # natoms
+    natms = int(line)
+    f.close()
+    # should use fancy array indexing to get only what we want :-)
+    # for i in range(natoms):
+    #     if(ioffmat[atypes[j]][0] == -1):
+    #          indexarray.append(j)
+    #          jtypes.append(atypes[j])
+
+    return(indexarray,jypes)
+#------------------------------------------------------------
 def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 
     line = f.readline() # read header or EOF
@@ -160,7 +188,7 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
             if(atypes[num] != int(data[1])):
                 print("ERROR! atom type change on",num+1)
     return 1 # read in configuration
-# end readlammpsconfig
+# end readconfig
 
 #------------------------------------------------------------
 def savehist(outfile,hist,nconfig,hdr,hnorm):
@@ -293,7 +321,8 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
 
     for i in range(natoms-1):
         if(ioffmat[atypes[i]][0]==-1):
-            dist = pos[i+1:]-pos[i]
+            # dist = pos[indexarray]-pos[i]
+            dist = pos[i+1:]-pos[i] 
             dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
             #for j in range(len(dist)):
             #    dist[k] -= box[k]*(math.floor(dist[k]/box[k]+.5))
