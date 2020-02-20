@@ -363,7 +363,7 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         ii = oidx[i]
         getvectwater(ii,pos,box,v) # get verticies of water molecule
         print(i,oidx.size)
-        #print(ii,pos[ii])
+        #print(ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
         rpos = opos-pos[ii] # distance between O and all other O's
         rpos = numpy.delete(rpos,i,axis=0) # remove self
