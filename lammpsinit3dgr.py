@@ -89,6 +89,45 @@ def getmass(lines):
             nmass = 0
     return mass
 #----------------------------
+def readinitatoms(natoms,lines,pos,atype):
+    #read natoms
+    natm = -1
+    hl = 0
+    nl = 0
+    for x in lines:
+        w = x.rstrip().split()
+        nl += 1
+        if w: # not a blank line
+            # print(w,natm)
+            if (natm > -1):
+                if not w[0].isdigit():
+                    # print(w[0],"not digit!")
+                    break
+                natm += 1
+                indx = int(w[0])  # atom index
+                #gindx = int(w[1]) # group index
+                atype[indx-1] = int(w[2])
+                #chg[indx-1] = float(w[3]) # atom charge
+                pos[indx-1] = [float(w[4]),float(w[5]),float(w[6])]
+                #boxoff[indx-1] = [int(w(7),int(w(8),int(w(9)]
+            if w[0] == "Atoms": # start counting Atoms!
+                natm = 0
+                hl = nl
+    print("natoms found = ",natm)
+    if (natm != natoms):  # error check
+        print("Something wrong, natoms do not match", natm, " found !=", natoms)
+        exit()
+#------------------------------------------
+def getvectwater(ii,pos,v):
+    r1 = pos[ii+1]-pos[ii] # H1-O
+    r2 = pos[ii+2]-pos[ii] # H2-O
+    v[0] = r2-r1 # H2-H1
+    v[0] /= numpy.linalg.norm(v[0])
+    v[2] = numpy.cross(v[0],(r1+r2))
+    v[2] /= numpy.linalg.norm(v[2])
+    v[1] = numpy.cross(v[2],v[0])
+    v[1] /= numpy.linalg.norm(v[1])
+#------------------------------------------
 def writevmd(i,pos,v1,v2,v3):
     if os.path.isfile("check.vmd"):
         f = open("check.vmd","a")
@@ -185,31 +224,8 @@ if (nmass != atmtypes):  # error check
 
 pos = numpy.zeros((natoms,3))
 atype = numpy.zeros((natoms))
-#read natoms
-natm = -1
-hl = 0
-nl = 0
-for x in lines:
-    w = x.rstrip().split()
-    nl += 1
-    if w: # not a blank line
-        # print(w,natm)
-        if (natm > -1):
-            if not w[0].isdigit():
-                # print(w[0],"not digit!")
-                break
-            natm += 1
-            indx = int(w[0])  # atom index
-            gindx = int(w[1]) # group index
-            pos[indx-1] = [float(w[4]),float(w[5]),float(w[6])]
-            atype[indx-1] = int(w[2])
-        if w[0] == "Atoms": # start counting Atoms!
-            natm = 0
-            hl = nl
-print("natoms found = ",natm)
-if (natm != natoms):  # error check
-    print("Something wrong, natoms do not match", natm, " found !=", natoms)
-    exit()
+
+readinitatoms(natoms,lines,pos,atype)
 
 gr3d = numpy.zeros((np))
 #print(gr3d.shape,gr3d)
@@ -226,21 +242,15 @@ rpos = numpy.zeros((oidx.size,3))
 
 for i in range(oidx.size):
     ii = oidx[i]
-    r1 = pos[ii+1]-pos[ii] # H1-O
-    r2 = pos[ii+2]-pos[ii] # H2-O
-    v[0] = pos[ii+2]-pos[ii+1] # H2-H1
-    v[0] /= numpy.linalg.norm(v[0])
-    v[2] = numpy.cross(v[0],(r1+r2))
-    v[2] /= numpy.linalg.norm(v[2])
-    v[1] = numpy.cross(v[2],v[0])
-    v[1] /= numpy.linalg.norm(v[1])
+    getvectwater(ii,pos,v) # get verticies of water molecule
     print(i,oidx.size)
-    # writevmd(ii,pos,v1,v2,v3)
-    rpos = opos-pos[ii] # distance
+    # writevmd(ii,pos,v)
+    rpos = opos-pos[ii] # distance between O and all other O's
     rpos = numpy.delete(rpos,i,axis=0) # remove self
     rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
-    rpos = numpy.inner(rpos,v) # distance along each vector
-    bingr3d(rpos,np,bins,gr3d)
+    rpos = numpy.inner(rpos,v) # distance along each vecticies
+    bingr3d(rpos,np,bins,gr3d) # great density plot
+
 #open file to write
 print("Creating file :",ofile)
 f = open(ofile,"w")
