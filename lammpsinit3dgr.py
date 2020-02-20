@@ -156,7 +156,7 @@ def bingr3d(pt,np,bins,gr3d):
     #print(pt,ptn,nr)
     ptn -= nr # get fraction of bin
     for i in range(pt.shape[0]):
-        if (numpy.amax(nr[i]-np)< -2 and numpy.amin(nr[i]+np)>0): # in range?
+        if (numpy.amax(nr[i]-np)< -2 and numpy.amin(nr[i])>0): # in range?
             gr3d[nr[i][0]][nr[i][1]][nr[i][2]] += (1-ptn[i][0])+(1-ptn[i][1])+(1-ptn[i][2])
     
             gr3d[nr[i][0]+1][nr[i][1]][nr[i][2]] += (ptn[i][0])+(1-ptn[i][1])+(1-ptn[i][2])
@@ -169,11 +169,36 @@ def bingr3d(pt,np,bins,gr3d):
         
             gr3d[nr[i][0]+1][nr[i][1]+1][nr[i][2]+1] += (ptn[i][0])+(ptn[i][1])+(ptn[i][2])
     
-#----------------------------
-
+#-----------------------------------------------------------
+def writedxfile(ofile,np,bins,gr3d,fact):
+    #open file to write
+    print("Creating file :",ofile)
+    f = open(ofile,"w")
+    #print header
+    hdr = "# opendx file for testing with 3dgr\n"
+    f.write(hdr)
+    hdr = "object 1 class gridpositions counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
+    f.write(hdr)
+    hdr = "origin " + str(bins[0][0]) + " " + str(bins[0][1]) + " " + str(bins[0][2]) +"\n"
+    f.write(hdr)
+    hdr = "delta "+str(bins[2][0])+" 0 0\ndelta 0 "+str(bins[2][1])+" 0\ndelta 0 0 "+str(bins[2][2])+"\n"
+    f.write(hdr)
+    hdr = "object 2 class gridconnections counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
+    f.write(hdr)
+    hdr = "object 3 class array type double rank 0 items "+str(np[0]*np[1]*np[2])+" data follows\n"
+    f.write(hdr)
+    #write data
+    fact=1./oidx.size
+    for i in range(np[0]):
+        for j in range(np[1]):
+            for k in range(np[2]):
+                f.write(str(gr3d[i][j][k]*fact)+"\n")
+    f.write("\nobject density class field\n")
+    print("Wrote file",ofile)
+#-----------------------------------------------------------
+#-----------------------------------------------------------
 parser = argparse.ArgumentParser(description="Read lammps init and traj file to create 3dgr of water")
 parser.add_argument("infile1",help="Lammps init file name to process")
-parser.add_argument("infile2",help="Lammps trajector file name to process")
 parser.add_argument("outfile",help="Lammps output 3dgr file to create")
 parser.add_argument('-max',type=float,dest='rmax',default=10,help="Max distancs in 3D g(r)")
 parser.add_argument('-min',type=float,dest='rmin',default=-10,help="Min Distance in 3D g(r)")
@@ -183,7 +208,6 @@ args = parser.parse_args()
 
 #lammpsfile = "lammps.test.init"
 lammpsinitfile = args.infile1
-lammpstrajfile = args.infile2
 ofile = args.outfile
 Otype = args.otype
 rmin = args.rmin
@@ -214,13 +238,12 @@ box = getbox(lines)
 print("box read in", box)
 
 #find masses
-mass = getmass(lines)
-nmass = len(mass)
-print("Masses found = ",nmass)
-
-if (nmass != atmtypes):  # error check
-    print("Something wrong, atom types do not match", atmtypes, " masses found !=", nmass)
-    exit()
+#mass = getmass(lines)
+#nmass = len(mass)
+#print("Masses found = ",nmass)
+#if (nmass != atmtypes):  # error check
+#    print("Something wrong, atom types do not match", atmtypes, " masses found !=", nmass)
+#    exit()
 
 pos = numpy.zeros((natoms,3))
 atype = numpy.zeros((natoms))
@@ -251,28 +274,6 @@ for i in range(oidx.size):
     rpos = numpy.inner(rpos,v) # distance along each vecticies
     bingr3d(rpos,np,bins,gr3d) # great density plot
 
-#open file to write
-print("Creating file :",ofile)
-f = open(ofile,"w")
-#print header
-hdr = "# opendx file for testing with 3dgr\n"
-f.write(hdr)
-hdr = "object 1 class gridpositions counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
-f.write(hdr)
-hdr = "origin " + str(bins[0][0]) + " " + str(bins[0][1]) + " " + str(bins[0][2]) +"\n"
-f.write(hdr)
-hdr = "delta "+str(bins[2][0])+" 0 0\ndelta 0 "+str(bins[2][1])+" 0\ndelta 0 0 "+str(bins[2][2])+"\n"
-f.write(hdr)
-hdr = "object 2 class gridconnections counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
-f.write(hdr)
-hdr = "object 3 class array type double rank 0 items "+str(np[0]*np[1]*np[2])+" data follows\n"
-f.write(hdr)
-#write data
-fact=1./oidx.size
-for i in range(np[0]):
-    for j in range(np[1]):
-        for k in range(np[2]):
-            f.write(str(gr3d[i][j][k]*fact)+"\n")
-f.write("\nobject density class field\n")
-print("Wrote file",ofile)
+fact = 1./oidx.size
+writedxfile(ofile,np,bins,gr3d,fact)
 print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
