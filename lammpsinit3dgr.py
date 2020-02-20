@@ -24,18 +24,16 @@ def indexline(al,value): # get line of value
     return n
 #----------------------------
 def getnatoms(al): # get natoms 
-    l = 0
+    natoms=-1
     for x in al:
-        l += 1
-        #print (x.rstrip())
-        w = x.rstrip().split()
-        if len(w) > 1:  # list has at least 2 elements (and not empty ;-) )
-            if w[1] == "atoms": # found keyword "atoms"
-                natoms = int(w[0])
-                if (l != 3):
-                    print ("Atoms not on line 3! ",l)
-                    exit(1)
-                break
+        if(re.search("atoms",x)):
+            #print (x.rstrip())
+            w = x.rstrip().split()
+            natoms = int(w[0])
+            break
+    if natoms == -1:
+        print("Atoms keyword not found!")
+        exit(1)
     return(natoms)
 #----------------------------
 def getatmtypes(lines): #Find number of atoms types
@@ -46,24 +44,28 @@ def getatmtypes(lines): #Find number of atoms types
             w = x.rstrip().split()
             atmtypes = int(w[0])
             break
+    if atmtypes == -1:
+        print("Atoms types keyword not found!")
+        exit(1)
     return(atmtypes)
 #----------------------------
-def getbox(lines):
-# find box dimensions
-    l=0
-    lbox = -1
-    box = []
+def getbox(lines):  # find box dimensions
+    box = numpy.array([-1,-1,-1])
     for x in lines:
-        l += 1
-        #print(x.rstrip())
         w = x.rstrip().split()
-        if (lbox > -1):  # box line
-            lbox += 1
-            box.extend([float(w[1])-float(w[0])])
-            if (lbox > 2): # read in three lines!
-                break
-        if (not w and l>3):  # first empty line after line 3
-            lbox += 1
+        #print (x,w)
+        if(re.search("xlo",x)):
+            box[0] = float(w[1])-float(w[0])
+        if(re.search("ylo",x)):
+            box[1] = float(w[1])-float(w[0])
+        if(re.search("zlo",x)):
+            box[2] = float(w[1])-float(w[0])
+        if (numpy.amin(box) > 0):
+            print("Box found")
+            break
+    if (numpy.amin(box) < 0):
+        print("Box not found!",box)
+        exit(1)        
     return box
 #----------------------------
 def getmass(lines):
@@ -109,32 +111,59 @@ def writevmd(i,pos,v1,v2,v3):
     f.close()
 
 #----------------------------
+def bingr3d(pt,np,bins,gr3d):
+    ptn = (pt-bins[0])/bins[2] # get bin numbers
+    nr = ptn.astype(int) # get integer numbers
+    #print(pt,ptn,nr)
+    ptn -= nr # get fraction of bin
+    for i in range(pt.shape[0]):
+        if (numpy.amax(nr[i]-np)< -2 and numpy.amin(nr[i]+np)>0): # in range?
+            gr3d[nr[i][0]][nr[i][1]][nr[i][2]] += (1-ptn[i][0])+(1-ptn[i][1])+(1-ptn[i][2])
+    
+            gr3d[nr[i][0]+1][nr[i][1]][nr[i][2]] += (ptn[i][0])+(1-ptn[i][1])+(1-ptn[i][2])
+            gr3d[nr[i][0]][nr[i][1]+1][nr[i][2]] += (1-ptn[i][0])+(ptn[i][1])+(1-ptn[i][2])
+            gr3d[nr[i][0]][nr[i][1]][nr[i][2]+1] += (1-ptn[i][0])+(1-ptn[i][1])+(ptn[i][2])
+        
+            gr3d[nr[i][0]+1][nr[i][1]+1][nr[i][2]] += (ptn[i][0])+(ptn[i][1])+(1-ptn[i][2])
+            gr3d[nr[i][0]+1][nr[i][1]][nr[i][2]+1] += (ptn[i][0])+(1-ptn[i][1])+(ptn[i][2])
+            gr3d[nr[i][0]][nr[i][1]+1][nr[i][2]+1] += (1-ptn[i][0])+(ptn[i][1])+(ptn[i][2])
+        
+            gr3d[nr[i][0]+1][nr[i][1]+1][nr[i][2]+1] += (ptn[i][0])+(ptn[i][1])+(ptn[i][2])
+    
+#----------------------------
 
-parser = argparse.ArgumentParser(description="Read lammps init files")
-parser.add_argument("infile",help="Lammps init file name to process")
+parser = argparse.ArgumentParser(description="Read lammps init and traj file to create 3dgr of water")
+parser.add_argument("infile1",help="Lammps init file name to process")
+parser.add_argument("infile2",help="Lammps trajector file name to process")
 parser.add_argument("outfile",help="Lammps output 3dgr file to create")
+parser.add_argument('-max',type=float,dest='rmax',default=10,help="Max distancs in 3D g(r)")
+parser.add_argument('-min',type=float,dest='rmin',default=-10,help="Min Distance in 3D g(r)")
+parser.add_argument("-otype",type=int,dest='otype',default=1,help="Oxygen type in lammps file")
+parser.add_argument("-npt",type=int,dest='npt',default=20,help="Number of point in each dimenstion")
 args = parser.parse_args()
 
 #lammpsfile = "lammps.test.init"
-lammpsfile = args.infile
+lammpsinitfile = args.infile1
+lammpstrajfile = args.infile2
 ofile = args.outfile
+Otype = args.otype
+rmin = args.rmin
+rmax = args.rmax
+npt = args.npt
 
-print("Reading in Lammps init file",lammpsfile)
-f = open(lammpsfile,"r")
+print("Reading in Lammps init file",lammpsinitfile)
+f = open(lammpsinitfile,"r")
 #lines = list(f)
 lines = f.readlines()
 f.close()
 
-Otype = 3
-Htype = 4
-
 #Grids
-nx = 50
-ny = 50
-nz = 50
-
-rmin = -10.0
-rmax =  10.0
+np = numpy.array([npt,npt,npt])
+bins = numpy.zeros((3,3))
+bins[0] = rmin
+bins[1] = rmax
+bins[2] = (bins[1]-bins[0])/np
+print(bins)
 
 natoms = getnatoms(lines)
 print("natoms in header = ",natoms)
@@ -153,8 +182,6 @@ print("Masses found = ",nmass)
 if (nmass != atmtypes):  # error check
     print("Something wrong, atom types do not match", atmtypes, " masses found !=", nmass)
     exit()
-
-delta = [(rmin-rmax)/nx,(rmin-rmax)/ny,(rmin-rmax)/nz]
 
 pos = numpy.zeros((natoms,3))
 atype = numpy.zeros((natoms))
@@ -184,7 +211,7 @@ if (natm != natoms):  # error check
     print("Something wrong, natoms do not match", natm, " found !=", natoms)
     exit()
 
-gr3d = numpy.zeros((nx,ny,nz))
+gr3d = numpy.zeros((np))
 #print(gr3d.shape,gr3d)
 
 oidx = numpy.where(atype == Otype)[0] # oxygen type index
@@ -193,42 +220,49 @@ oidx = numpy.where(atype == Otype)[0] # oxygen type index
 #        oidx.append(i)
 print("Number of Otypes found = ",oidx.size)
 
-for i in range(oidx.size-1):
+v = numpy.zeros((3,3))
+opos = numpy.take(pos,oidx,axis=0)
+rpos = numpy.zeros((oidx.size,3))
+
+for i in range(oidx.size):
     ii = oidx[i]
     r1 = pos[ii+1]-pos[ii] # H1-O
     r2 = pos[ii+2]-pos[ii] # H2-O
-    v1 = (r1+r2)
-    v1 /= numpy.linalg.norm(v1)
-    v2 = numpy.cross(v1,r1)
-    v2 /= numpy.linalg.norm(v2)
-    v3 = numpy.cross(v1,v2)
-    v3 /= numpy.linalg.norm(v3)
-    # print(i,v1,v2,v3)
-    #writevmd(ii,pos,v1,v2,v3)
-    for j in range(i+1,oidx.size):
-        jj = oidx[j]
-        dr = pos[jj]-pos[ii]
-        dx = numpy.dot(dr,v1)
-        dy = numpy.dot(dr,v2)
-        dz = numpy.dot(dr,v3)
-        print(dx,dy,dz)
-    
+    v[0] = pos[ii+2]-pos[ii+1] # H2-H1
+    v[0] /= numpy.linalg.norm(v[0])
+    v[2] = numpy.cross(v[0],(r1+r2))
+    v[2] /= numpy.linalg.norm(v[2])
+    v[1] = numpy.cross(v[2],v[0])
+    v[1] /= numpy.linalg.norm(v[1])
+    print(i,oidx.size)
+    # writevmd(ii,pos,v1,v2,v3)
+    rpos = opos-pos[ii] # distance
+    rpos = numpy.delete(rpos,i,axis=0) # remove self
+    rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
+    rpos = numpy.inner(rpos,v) # distance along each vector
+    bingr3d(rpos,np,bins,gr3d)
 #open file to write
 print("Creating file :",ofile)
 f = open(ofile,"w")
-
 #print header
 hdr = "# opendx file for testing with 3dgr\n"
 f.write(hdr)
-hdr = "object 1 class gridpositions counts "+str(nx)+" "+str(ny)+" "+str(nz)+"\n"
+hdr = "object 1 class gridpositions counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
 f.write(hdr)
-hdr = "origin " + str(rmin) + " " + str(rmin) + " " + str(rmin) +"\n"
+hdr = "origin " + str(bins[0][0]) + " " + str(bins[0][1]) + " " + str(bins[0][2]) +"\n"
 f.write(hdr)
-hdr = "delta "+str(delta[0])+" 0 0\ndelta 0 "+str(delta[1])+" 0\ndelta 0 0 "+str(delta[2])+"\n"
+hdr = "delta "+str(bins[2][0])+" 0 0\ndelta 0 "+str(bins[2][1])+" 0\ndelta 0 0 "+str(bins[2][2])+"\n"
 f.write(hdr)
-hdr = "object 2 class gridconnections counts "+str(nx)+" "+str(ny)+" "+str(nz)+"\n"
+hdr = "object 2 class gridconnections counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
 f.write(hdr)
-hdr = "object 3 class array type double rank 0 items "+str(nx*ny*nz)+" data follows\n"
+hdr = "object 3 class array type double rank 0 items "+str(np[0]*np[1]*np[2])+" data follows\n"
 f.write(hdr)
-print("Wrote header")
-exit(1)
+#write data
+fact=1./oidx.size
+for i in range(np[0]):
+    for j in range(np[1]):
+        for k in range(np[2]):
+            f.write(str(gr3d[i][j][k]*fact)+"\n")
+f.write("\nobject density class field\n")
+print("Wrote file",ofile)
+print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
