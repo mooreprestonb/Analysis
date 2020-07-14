@@ -1,0 +1,46 @@
+LAMMPS (9 Nov 2016)
+OMP_NUM_THREADS environment is not set. Defaulting to 1 thread. (../comm.cpp:90)
+  using 1 OpenMP thread(s) per MPI task
+Reading restart file ...
+  restart file = 9 Nov 2016, LAMMPS = 9 Nov 2016
+  orthogonal box = (-40.3071 -40.1457 -40.3469) to (40.7583 40.9197 40.7185)
+  1 by 1 by 3 MPI processor grid
+  48288 atoms
+  32000 bonds
+  16000 angles
+Finding 1-2 1-3 1-4 neighbors ...
+ Special bond factors lj:   0          0          0         
+ Special bond factors coul: 0          0          0         
+  2 = max # of 1-2 neighbors
+  1 = max # of 1-3 neighbors
+  1 = max # of 1-4 neighbors
+  2 = max # of special neighbors
+Resetting global fix info from restart file:
+  fix style: npt, fix ID: 2
+PPPM initialization ...
+WARNING: Using 12-bit tables for long-range coulomb (../kspace.cpp:317)
+  G vector (1/distance) = 0.306504
+  grid = 72 72 72
+  stencil order = 5
+  estimated absolute RMS force accuracy = 0.00260906
+  estimated relative force accuracy = 7.85711e-06
+  using double precision FFTs
+  3d grid and FFT values/proc = 193471 124416
+All restart file global fix info was re-assigned
+Neighbor list info ...
+  1 neighbor list requests
+  update every 1 steps, delay 10 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 14
+  ghost atom cutoff = 14
+  binsize = 7, bins = 12 12 12
+Setting up Verlet run ...
+  Unit style    : real
+  Current step  : 176000
+  Time step     : 1
+Memory usage per processor = 48.8288 Mbytes
+Step Elapsed Temp Press Volume TotEng KinEng PotEng E_mol E_pair Pxx Pyy Pzz Pxz Pxz Pyz 
+  176000        0    296.05539    204.46188     532728.3   -119232.83    42612.547   -161845.38    12163.352   -174008.73    161.98507   -9.1265297    460.52711    84.365293    84.365293   -97.863655 
+  177000     1000    296.57685   -231.61451    533830.27   -119731.25    42687.603   -162418.85    12208.387   -174627.24   -277.29739   -322.42899   -95.117148    -147.7198    -147.7198    93.494403 
+  178000     2000    298.60004   -38.465641    533185.49   -119093.42     42978.81   -162072.23    11918.267   -173990.49     18.58043   -176.18122    42.203865   -211.53144   -211.53144    70.341758 
+  179000     3000    299.09676    201.59517    531923.67    -119053.7    43050.305   -162104.01    12099.228   -174203.24    69.352764    278.49084    256.94192     324.0413     324.0413    35.590692 
