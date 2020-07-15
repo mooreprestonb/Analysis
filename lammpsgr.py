@@ -177,6 +177,17 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 # end readconfig
 
 #------------------------------------------------------------
+def distbin(apos,ipos,jbin):
+    dist = apos-ipos # get distances
+    dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
+    rdist = numpy.linalg.norm(dist,axis=1)
+    ibin = ((rdist-rmin)/dx).astype(int) # get index
+    for j in range(len(rdist)):                
+        if(ibin[j]>=0 and ibin[j]<nbins-1):
+            frac = (rdist[j]-rmin)/dx - ibin[j]
+            hist[ibin[j]  ][jbin] += 1.-frac
+            hist[ibin[j]+1][jbin] += frac                   
+#------------------------------------------------------------
 def savehist(outfile,hist,nconfig,hdr,hnorm):
     data = numpy.array(hist*hnorm)
     hdr1 = hdr + " nconfigs: " + str(nconfig)
@@ -263,7 +274,7 @@ dx = (rmax-rmin)/(nbins-1)
 histnorm = numpy.zeros((nbins,toff)) 
 hist = numpy.zeros((nbins,toff)) # types 1-1, 1-2 ... 1-n, 2-2.... 2-n, ... n-n
 #hist[:,0] = numpy.arange(rmin,rmax,dx) # create bin values but can be off in rounding error so we do explicit.
-for i in range(nbins):
+for i in range(nbins): # create xrange for histograms
     r = i*dx+rmin
     hist[i][0] = r
 
@@ -304,7 +315,7 @@ print("Processing ",configname)
 while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #print(natoms,box,pos,atypes)
     nconfig += 1
-    print("Processing config: ",nconfig,box)
+    print("Config: ",nconfig,box," ",end='',flush=True)
     svol += box[0]*box[1]*box[2]
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
@@ -313,36 +324,16 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
             ipos = pos[ngbrs[it]]
             for jt in range(it,ntypes):
                 if(ioffmat[0][jt+1] == -1):
-                    if(it==jt):
+                    print(" ",it+1,"-",jt+1," ",sep='',end='',flush=True)
+                    jbin = ioffmat[it+1][jt+1]
+                    if(it==jt): # same type                        
                         for i in range(len(ipos)-1):
-                            dist = ipos[i+1:]-ipos[i] 
-                            dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
-                            #for j in range(len(dist)):
-                            #    dist[k] -= box[k]*(math.floor(dist[k]/box[k]+.5))
-                            rdist = numpy.linalg.norm(dist,axis=1)
-                            ibin = ((rdist-rmin)/dx).astype(int)
-                            for j in range(len(rdist)):                
-                                if(ibin[j]>=0 and ibin[j]<nbins-1):
-                                    jbin = ioffmat[it+1][jt+1]
-                                    frac = (rdist[j]-rmin)/dx - ibin[j]
-                                    hist[ibin[j]  ][jbin] += 1.-frac
-                                    hist[ibin[j]+1][jbin] += frac                
-                    else:
+                            distbin(ipos[i+1:],ipos[i],jbin)
+                    else: # different type
                         jpos = pos[ngbrs[jt]]
                         for i in range(len(ipos)):
-                            dist = jpos-ipos[i] 
-                            dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
-                            #for j in range(len(dist)):
-                            #    dist[k] -= box[k]*(math.floor(dist[k]/box[k]+.5))
-                            rdist = numpy.linalg.norm(dist,axis=1)
-                            ibin = ((rdist-rmin)/dx).astype(int)
-                            for j in range(len(rdist)):                
-                                if(ibin[j]>0 and ibin[j]<nbins-1):
-                                    jbin = ioffmat[it+1][jt+1]
-                                    frac = (rdist[j]-rmin)/dx - ibin[j]
-                                    hist[ibin[j]  ][jbin] += 1.-frac
-                                    hist[ibin[j]+1][jbin] += frac
-
+                            distbin(jpos,ipos[i],jbin)
+    print()
                         
     tnowi = time.time()
     if(itime < tnowi-tnow):
