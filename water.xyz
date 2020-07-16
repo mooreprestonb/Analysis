@@ -1,5 +1,5 @@
 3
 water xyz for vmd visualization of density maps
 O 0 0 0
-H 1 1 0
-H -1 1 0
+H .8 .6 0
+H -.8 .6 0

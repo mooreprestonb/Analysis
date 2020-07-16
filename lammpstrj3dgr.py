@@ -291,7 +291,8 @@ parser.add_argument('-nbins',type=int,dest='nbins',default=20,help="Number of bi
 parser.add_argument('-time',type=int,dest='time',default=10,help="Report and write progress every so many seconds")
 parser.add_argument('-max',type=float,dest='rmax',default=10,help="Max distancs in g(r)")
 parser.add_argument('-min',type=float,dest='rmin',default=-10,help="Min distance in g(r)")
-parser.add_argument('-otype', type=int, dest='otype',default=1,help="Water Oxygen atoms type")
+parser.add_argument('-type1', type=int, dest='type1',default=1,help="Water Oxygen atoms type")
+parser.add_argument('-type2', type=int, dest='type2',default=1,help="type to bin against water")
 
 # read in arguments, now translate to variables
 args = parser.parse_args()
@@ -302,7 +303,8 @@ outfile = args.output
 itime = args.time
 rmax = args.rmax
 rmin = args.rmin
-otype = args.otype
+otype = args.type1
+type2 = args.type2
 
 #Grids
 np = numpy.array([nbins,nbins,nbins])
@@ -339,10 +341,14 @@ gr3d = numpy.zeros((np))
 #print(gr3d.shape,gr3d)
 
 oidx = numpy.where(atypes == otype)[0] # oxygen type index
-print("Number of Otypes found = ",oidx.size)
-print(oidx)
+indx2 = numpy.where(atypes == type2)[0] # type2 index
+noxy = oidx.size
+ntype2 = indx2.size
+print("Number of Otypes found = ",noxy,"Number of type 2 =",ntype2)
+print(oidx,indx2)
+
 v = numpy.zeros((3,3))
-rpos = numpy.zeros((oidx.size,3))
+rpos = numpy.zeros((ntype2,3))
 
 f = open(configname,'r')
 nconfig = 0  # 
@@ -358,34 +364,36 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     svol += box[0]*box[1]*box[2]
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
-    opos = numpy.take(pos,oidx,axis=0)
-    for i in range(oidx.size):
+    pos2 = numpy.take(pos,indx2,axis=0)
+    for i in range(noxy):
         ii = oidx[i]
         getvectwater(ii,pos,box,v) # get verticies of water molecule
-        print(i,oidx.size)
+        #print(i,noxy,ntype2,nconfig)
         #print(ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
-        rpos = opos-pos[ii] # distance between O and all other O's
-        rpos = numpy.delete(rpos,i,axis=0) # remove self
+        rpos = pos2-pos[ii] # distance between O and all other O's
+        if(otype == type2):
+            rpos = numpy.delete(rpos,i,axis=0) # remove self
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
         rpos = numpy.inner(rpos,v) # distance along each vecticies
         bingr3d(rpos,np,bins,gr3d) # great density plot
 
-    tnowi = time.time()
-    if(itime < tnowi-tnow):
-        runtime = tnowi-ttime
-        etime = runtime*nconf/nconfig
-        avol = svol/nconfig
-        print('configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(nconfig,nconf,nconfig/nconf,runtime,etime,avol))
-        fact = 1./(oidx.size*nconfig)
-        writedxfile(outfile,np,bins,gr3d,fact)
-        print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
-        tnow = time.time()
+        tnowi = time.time()
+        if(itime < tnowi-tnow):
+            runtime = tnowi-ttime
+            etime = runtime*nconf/nconfig
+            avol = svol/nconfig
+            print('otype = {}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,noxy,nconfig,nconf,nconfig/nconf,runtime,etime,avol))
+            fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
+            writedxfile(outfile,np,bins,gr3d,fact)
+            #print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
+            tnow = time.time()
 
 avol = svol/nconfig
 stdvol = math.sqrt((svol2/nconfig - avol*avol))
 print("# configs read in:",nconfig," <vol> =",avol, "stdvol = ",stdvol)
+print("Otypes:",otype,"with ",noxy,"molecules and type2",type2," with",ntype2)
 
-fact = 1./(oidx.size*nconfig)
+fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
 writedxfile(outfile,np,bins,gr3d,fact)
 print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
