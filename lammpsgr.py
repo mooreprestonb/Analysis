@@ -98,33 +98,19 @@ def getlammpsatoms(configname): # find # atoms in lammps header
     return(natms)
 
 #------------------------------------------------------------
-def getngrblist(configname): # find interacting atoms and types
+def getngbrlist(configname,natoms,box,pos,atypes,ngbrs): # find interacting atoms and types
     f = open(configname,'r')
-
-    line = f.readline() # read header or EOF
-    if (line==""): # end of file! EOF!
-        print("EOF while reading header?!?")
-        return 0
-    if (line.rstrip() != "ITEM: TIMESTEP"):
-        print("ERROR! first line of config is not \"ITEM: TIMESTEP\"")
-        exit(1)
-    line = f.readline() # read timestep
-    ts = int(line)
-
-    line = f.readline() # read "ITEM: NUMBER OF ATOMS"
-    if (line.rstrip() != "ITEM: NUMBER OF ATOMS"):
-        print("ERROR! 3rd line of config is not \"ITEM: NUMBER OF ATOMS\"")
-        exit(1)
-    line = f.readline() # natoms
-    natms = int(line)
+    readconfig(f,natoms,box,pos,atypes,0) # read one config to get atypes
     f.close()
     # should use fancy array indexing to get only what we want :-)
-    # for i in range(natoms):
-    #     if(ioffmat[atypes[j]][0] == -1):
-    #          indexarray.append(j)
-    #          jtypes.append(atypes[j])
 
-    return(indexarray,jypes)
+    ingbr = [0]*len(ngbrs)
+    for i in range(natoms):
+        itype = atypes[i]-1
+        #print(i,itype,ingbr[itype])
+        ngbrs[itype][ingbr[itype]] = i
+        ingbr[itype] += 1
+        
 #------------------------------------------------------------
 def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 
@@ -191,6 +177,17 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 # end readconfig
 
 #------------------------------------------------------------
+def distbin(apos,ipos,jbin):
+    dist = apos-ipos # get distances
+    dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
+    rdist = numpy.linalg.norm(dist,axis=1)
+    ibin = ((rdist-rmin)/dx).astype(int) # get index
+    for j in range(len(rdist)):                
+        if(ibin[j]>=0 and ibin[j]<nbins-1):
+            frac = (rdist[j]-rmin)/dx - ibin[j]
+            hist[ibin[j]  ][jbin] += 1.-frac
+            hist[ibin[j]+1][jbin] += frac                   
+#------------------------------------------------------------
 def savehist(outfile,hist,nconfig,hdr,hnorm):
     data = numpy.array(hist*hnorm)
     hdr1 = hdr + " nconfigs: " + str(nconfig)
@@ -224,15 +221,21 @@ print("Number of atoms:",natoms)
 
 types = getlammpstypes(configname,natoms)
 ntypes =len(types.keys())
+ngbrs = [None]*ntypes # allocate empty arrays
 stypes = str(ntypes)
 for k in sorted(types): # iterate over key, value pairs 
     stypes += " " + str(k) + ":" + str(types[k])
+    ngbrs[k-1] = numpy.empty(types[k],dtype=int)
 print("Number of atom types: ",stypes)
 
 box = getlammpsbox(configname)
 print("Initial box dimensions = ",box)
-
 nconf = getlammpsnconf(configname,natoms) # count configurations
+
+# allocate arrays
+pos = numpy.zeros((natoms,3))
+atypes = numpy.zeros(natoms,dtype=int)
+getngbrlist(configname,natoms,box,pos,atypes,ngbrs)
 
 # check types
 if itypes == None:
@@ -246,10 +249,6 @@ else :
             print("ERROR! type not found",it,types)
             exit(1)
     
-# allocate arrays
-pos = numpy.zeros((natoms,3))
-atypes = numpy.zeros(natoms,dtype=int)
-
 toff = 1
 ioffmat = numpy.zeros((ntypes+1,ntypes+1),dtype=int)
 pairs = []
@@ -275,7 +274,7 @@ dx = (rmax-rmin)/(nbins-1)
 histnorm = numpy.zeros((nbins,toff)) 
 hist = numpy.zeros((nbins,toff)) # types 1-1, 1-2 ... 1-n, 2-2.... 2-n, ... n-n
 #hist[:,0] = numpy.arange(rmin,rmax,dx) # create bin values but can be off in rounding error so we do explicit.
-for i in range(nbins):
+for i in range(nbins): # create xrange for histograms
     r = i*dx+rmin
     hist[i][0] = r
 
@@ -305,6 +304,7 @@ hdr += "\n r "
 for p in pairs: # add pairs to header
     hdr += p+" "
 #
+
 f = open(configname,'r')
 nconfig = 0  # 
 tnow = time.time()
@@ -315,28 +315,26 @@ print("Processing ",configname)
 while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #print(natoms,box,pos,atypes)
     nconfig += 1
-    print("Processing config: ",nconfig,box)
+    print("Config: ",nconfig,box," ",end='',flush=True)
     svol += box[0]*box[1]*box[2]
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
-    for i in range(natoms-1):
-        if(ioffmat[atypes[i]][0]==-1):
-            # dist = pos[indexarray]-pos[i]
-            dist = pos[i+1:]-pos[i] 
-            dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
-            #for j in range(len(dist)):
-            #    dist[k] -= box[k]*(math.floor(dist[k]/box[k]+.5))
-            rdist = numpy.linalg.norm(dist,axis=1)
-            ibin = ((rdist-rmin)/dx).astype(int)
-            for j in range(len(rdist)):                
-                if(ibin[j]>=0 and ibin[j]<nbins-1 and (ioffmat[0][atypes[i+1+j]] == -1)):
-                    jbin = ioffmat[atypes[i]][atypes[i+1+j]]
-                    #print(i,i+1+j,pos[i],pos[i+1+j],rdist[j],ibin[j],jbin,ntypes,jn,jm)
-                    #hist[ibin[j]][jbin] += 1
-                    frac = (rdist[j]-rmin)/dx - ibin[j]
-                    hist[ibin[j]  ][jbin] += 1.-frac
-                    hist[ibin[j]+1][jbin] += frac                
-
+    for it in range(ntypes):
+        if(ioffmat[it+1][0] == -1):
+            ipos = pos[ngbrs[it]]
+            for jt in range(it,ntypes):
+                if(ioffmat[0][jt+1] == -1):
+                    print(" ",it+1,"-",jt+1," ",sep='',end='',flush=True)
+                    jbin = ioffmat[it+1][jt+1]
+                    if(it==jt): # same type                        
+                        for i in range(len(ipos)-1):
+                            distbin(ipos[i+1:],ipos[i],jbin)
+                    else: # different type
+                        jpos = pos[ngbrs[jt]]
+                        for i in range(len(ipos)):
+                            distbin(jpos,ipos[i],jbin)
+    print()
+                        
     tnowi = time.time()
     if(itime < tnowi-tnow):
         runtime = tnowi-ttime
