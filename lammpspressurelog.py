@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 
+# parse lammps log files
+
 import sys
 import numpy
 import math
@@ -17,14 +19,19 @@ for l in lines:
         #print("found step")
         break
 
+header = lines[ls-1].split()
+nc = len(header)
 n = len(lines[ls:])
-print(n," lines of data")
-press = numpy.empty((6,n),dtype=float)
+print(len(header),"Columns of data")
+print(n,"lines of data")
+data = numpy.empty((nc,n),dtype=float)
 for l in range(n):
     words = lines[ls+l].split()
-    for i in range(6):
-        press[i][l] = float(words[10+i])
+    if(words[0].isdigit()==False):
+        break
+    for i in range(nc):
+        data[i][l] = float(words[i])
 
-for i in range(6):
-    print(i,numpy.average(press[i]),numpy.std(press[i]))
+for i in range(nc):
+    print(i,header[i],numpy.average(data[i]),numpy.std(data[i]))
 
