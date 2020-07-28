@@ -39,9 +39,10 @@ for l in range(n):
     nd += 1
 #print(data[0][:nd])
 print("#",sys.argv,len(header),"columns of data, with",nd,"lines of data")
-print("# column header average stdev skew kurtosis min max range")
+print("# column header average stdev skew kurtosis min max range [slop intercept]")
 for i in range(nc):
     da = data[i][:nd] # only data that was parsed
     dmin = numpy.min(da)
     dmax = numpy.max(da)
-    print(i,header[i],numpy.average(da),numpy.std(da),skew(da),kurtosis(da),dmin,dmax,dmax-dmin)
+    model = numpy.polyfit(range(nd),da,1)
+    print(i,header[i],numpy.average(da),numpy.std(da),skew(da),kurtosis(da),dmin,dmax,dmax-dmin,model)
