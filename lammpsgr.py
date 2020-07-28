@@ -315,7 +315,7 @@ print("Processing ",configname)
 while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #print(natoms,box,pos,atypes)
     nconfig += 1
-    print("Config: ",nconfig,box," ",end='',flush=True)
+    print(f'Config: {nconfig} [{box[0]:.3f} {box[1]:.3f} {box[2]:.3f}]',end='',flush=True)
     svol += box[0]*box[1]*box[2]
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
