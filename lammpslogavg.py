@@ -44,6 +44,6 @@ for i in range(nc):
     da = data[i][:nd] # only data that was parsed
     dmin = numpy.min(da)
     dmax = numpy.max(da)
-    model = numpy.polyfit(range(nd),da,1)
+    model = numpy.polyfit(range(nd),da,2)
     print(f'{i:3} {header[i]:8} {numpy.average(da):13.4f} {numpy.std(da):13.4f} {skew(da):10.4f} {kurtosis(da):10.4f} {dmin:10.4g} {dmax:10.4g} {dmax-dmin:10.4g} [{model[0]:10.4g} {model[1]:10.4g}]')
     #print(i,header[i],numpy.average(da),numpy.std(da),skew(da),kurtosis(da),dmin,dmax,dmax-dmin,model)

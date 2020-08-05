@@ -211,6 +211,18 @@ def getvectwater(ii,pos,box,v):
     v[1] = numpy.cross(v[2],v[0])
     v[1] /= numpy.linalg.norm(v[1])
 #------------------------------------------
+def getvecttbac(ii,pos,box,v):
+    r1 = pos[ii+14]-pos[ii+1] # C15-C1
+    r2 = pos[ii+40]-pos[ii+27] # C41-C28
+    r1 -= numpy.floor(r1/box+.5)*box # periodic boundary
+    r2 -= numpy.floor(r2/box+.5)*box # periodic boundary
+    v[0] = r1 #
+    v[0] /= numpy.linalg.norm(v[0])
+    v[2] = numpy.cross(v[0],r2)
+    v[2] /= numpy.linalg.norm(v[2])
+    v[1] = numpy.cross(v[2],v[0])
+    v[1] /= numpy.linalg.norm(v[1])
+#------------------------------------------
 def writevmd(i,pos,v):
     if os.path.isfile("check.vmd"):
         f = open("check.vmd","a")
@@ -270,7 +282,7 @@ def writedxfile(ofile,np,bins,gr3d,fact):
     hdr = "object 3 class array type double rank 0 items "+str(np[0]*np[1]*np[2])+" data follows\n"
     f.write(hdr)
     #write data
-    fact=1./oidx.size
+    fact=1./nidx.size
     for i in range(np[0]):
         for j in range(np[1]):
             for k in range(np[2]): 
@@ -303,7 +315,7 @@ outfile = args.output
 itime = args.time
 rmax = args.rmax
 rmin = args.rmin
-otype = args.type1
+Ntype = args.type1
 type2 = args.type2
 
 #Grids
@@ -340,12 +352,12 @@ getlammpsatypes(configname,natoms,atypes)
 gr3d = numpy.zeros((np))
 #print(gr3d.shape,gr3d)
 
-oidx = numpy.where(atypes == otype)[0] # oxygen type index
+nidx = numpy.where(atypes == Ntype)[0] # oxygen type index
 indx2 = numpy.where(atypes == type2)[0] # type2 index
-noxy = oidx.size
+nnitro = nidx.size
 ntype2 = indx2.size
-print("Number of Otypes found = ",noxy,"Number of type 2 =",ntype2)
-print(oidx,indx2)
+print("Number of Ntypes found = ",nnitro,"Number of type 2 =",ntype2)
+print(nidx,indx2)
 
 v = numpy.zeros((3,3))
 rpos = numpy.zeros((ntype2,3))
@@ -365,26 +377,26 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
     pos2 = numpy.take(pos,indx2,axis=0)
-    for i in range(noxy):
-        ii = oidx[i]
-        getvectwater(ii,pos,box,v) # get verticies of water molecule
-        #print(i,noxy,ntype2,nconfig)
+    for i in range(nnitro):
+        ii = nidx[i]
+        getvecttbac(ii,pos,box,v) # get verticies of water molecule
+        #print(i,nnitro,ntype2,nconfig)
         #print(ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
-        rpos = pos2-pos[ii] # distance between O and all other O's
-        if(otype == type2):
+        rpos = pos2-pos[ii] # distance between N and all others
+        if(Ntype == type2):
             rpos = numpy.delete(rpos,i,axis=0) # remove self
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
         rpos = numpy.inner(rpos,v) # distance along each vecticies
-        bingr3d(rpos,np,bins,gr3d) # create density plot
+        bingr3d(rpos,np,bins,gr3d) # great density plot
 
         tnowi = time.time()
         if(itime < tnowi-tnow):
             runtime = tnowi-ttime
             etime = runtime*nconf/nconfig
             avol = svol/nconfig
-            print('otype = {}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,noxy,nconfig,nconf,nconfig/nconf,runtime,etime,avol))
-            fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
+            print('Ntype = {}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,nnitro,nconfig,nconf,nconfig/nconf,runtime,etime,avol))
+            fact = 1./(3*nnitro*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
             writedxfile(outfile,np,bins,gr3d,fact)
             #print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
             tnow = time.time()
@@ -392,8 +404,8 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
 avol = svol/nconfig
 stdvol = math.sqrt((svol2/nconfig - avol*avol))
 print("# configs read in:",nconfig," <vol> =",avol, "stdvol = ",stdvol)
-print("Otypes:",otype,"with ",noxy,"molecules and type2",type2," with",ntype2)
+print("Ntypes:",Ntype,"with ",nnitro,"molecules and type2",type2," with",ntype2)
 
-fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
+fact = 1./(3*nnitro*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
 writedxfile(outfile,np,bins,gr3d,fact)
 print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
