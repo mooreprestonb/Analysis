@@ -102,7 +102,6 @@ def getngbrlist(configname,natoms,box,pos,atypes,ngbrs): # find interacting atom
     f = open(configname,'r')
     readconfig(f,natoms,box,pos,atypes,0) # read one config to get atypes
     f.close()
-    # should use fancy array indexing to get only what we want :-)
 
     ingbr = [0]*len(ngbrs)
     for i in range(natoms):
@@ -138,15 +137,12 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     if (line.rstrip()[:16] != "ITEM: BOX BOUNDS"):
         print("ERROR! 5th line not \"ITEM: BOX BOUNDS pp pp pp\"")
         exit(1)
-    line = f.readline() # xlo xhi
-    data = line.split()
-    box[0] = float(data[1])-float(data[0])
-    line = f.readline() # ylo yhi
-    data = line.split()
-    box[1] = float(data[1])-float(data[0])
-    line = f.readline() # zlo zhi
-    data = line.split()
-    box[2] = float(data[1])-float(data[0])
+
+    def boxlength(words):
+        return float(words[1]) - float(words[0])
+    box[0] = boxlength(f.readline().split()) # xlo xhi
+    box[1] = boxlength(f.readline().split()) # ylo yhi
+    box[2] = boxlength(f.readline().split()) # zlo zhi
     
     line = f.readline() # read "ITEM: ATOMS id type xs ys zs" (scaled coord)
     if (line.rstrip() == "ITEM: ATOMS id type xs ys zs"):
@@ -177,16 +173,26 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 # end readconfig
 
 #------------------------------------------------------------
-def distbin(apos,ipos,jbin):
+def distbin(apos,ipos,jbin): #bin the historgram
     dist = apos-ipos # get distances
     dist = dist-numpy.floor(dist/box+.5)*box # get periodic boundaries
     rdist = numpy.linalg.norm(dist,axis=1)
     ibin = ((rdist-rmin)/dx).astype(int) # get index
-    for j in range(len(rdist)):                
-        if(ibin[j]>=0 and ibin[j]<nbins-1):
-            frac = (rdist[j]-rmin)/dx - ibin[j]
-            hist[ibin[j]  ][jbin] += 1.-frac
-            hist[ibin[j]+1][jbin] += frac                   
+#    for j in range(len(rdist)):                
+#        if(ibin[j]>=0 and ibin[j]<nbins-1):
+#            frac = (rdist[j]-rmin)/dx - ibin[j]
+#            hist[ibin[j]  ][jbin] += 1.-frac
+#            hist[ibin[j]+1][jbin] += frac                   
+    tibin = numpy.where((ibin<nbins-1)*(ibin>0))[0] # get where ibin is > 0 and < nbins-1
+#    frac = (rdist[tibin] - rmin)/dx - ibin[tibin]
+#    ibx = ibin[tibin]
+#    hist[ibx][jbin] += 1 - fact
+#    hist[ibx+1][jbin] += fact
+#    print(tibin,frac)
+    for j in tibin:
+        frac1 = (rdist[j]-rmin)/dx - ibin[j]
+        hist[ibin[j]  ][jbin] += 1.-frac1
+        hist[ibin[j]+1][jbin] += frac1                   
 #------------------------------------------------------------
 def savehist(outfile,hist,nconfig,hdr,hnorm):
     data = numpy.array(hist*hnorm)
@@ -202,7 +208,8 @@ parser.add_argument('-nbins',type=int,dest='nbins',default=100,help="Number of b
 parser.add_argument('-time',type=int,dest='time',default=10,help="Report and write progress every so many seconds")
 parser.add_argument('-max',type=float,dest='rmax',default=10,help="Max distancs in g(r)")
 parser.add_argument('-min',type=float,dest='rmin',default=0,help="Min Distance in g(r)")
-parser.add_argument('-types', type=int, nargs="+", dest='itypes', help="atoms types to processes")
+parser.add_argument('-itypes', type=int, nargs="+", dest='itypes', help="iatoms types to processes")
+parser.add_argument('-jtypes', type=int, nargs="+", dest='jtypes', help="jatoms types to processes")
 
 # read in arguments, now translate to variables
 args = parser.parse_args()
@@ -213,7 +220,8 @@ outfile = args.output
 itime = args.time
 rmax = args.rmax
 rmin = args.rmin
-itypes = args.itypes
+aitypes = args.itypes
+ajtypes = args.jtypes
 
 print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
@@ -238,34 +246,51 @@ atypes = numpy.zeros(natoms,dtype=int)
 getngbrlist(configname,natoms,box,pos,atypes,ngbrs)
 
 # check types
-if itypes == None:
-    print("Using all types")
-    itypes = []
+if (aitypes == None and ajtypes != None):
+    print("Error: jtypes specified without itypes")
+    exit(1)
+    
+itypes = []
+jtypes = []
+if aitypes == None:
+    print("Using all types for itypes 1-",ntypes+1)
     for i in range(1,ntypes+1):
         itypes.append(i)
 else :
-    for it in itypes:
+    for it in aitypes:
         if it not in types:
-            print("ERROR! type not found",it,types)
+            print("ERROR! itype not found",it,types)
             exit(1)
-    
+        itypes.append(it)
+
+if ajtypes == None:
+    print("Using all itypes for jtypes")
+    jtypes = itypes
+else :
+    for jt in ajtypes:
+        if jt not in types:
+            print("ERROR! jtype not found",jt,types)
+            exit(1)
+        jtypes.append(jt)
+
+print(itypes,jtypes)
+
+# Create offset matrix for types we are processing
 toff = 1
 ioffmat = numpy.zeros((ntypes+1,ntypes+1),dtype=int)
 pairs = []
-for j in range(1,ntypes+1):
-    if j in itypes: # are we processing this type?
-        for i in range(1,ntypes+1):
-            if i in itypes: # are we processing this type?
-                if (i<j): # diagonal matrix...
-                    ioffmat[i][j] = ioffmat[j][i]
-                    # print("j<i",i,j,toff)
-                else:
-                    ioffmat[0][j] = -1
-                    ioffmat[i][0] = -1
+for i in range(1,ntypes+1):
+    if i in itypes: # are we processing this type?
+        ioffmat[i][0] = -1
+        for j in range(1,ntypes+1):
+            if j in jtypes: # are we processing this type?
+                ioffmat[0][j] = -1
+                if(ioffmat[i][j] == 0):
                     ioffmat[i][j] = toff
+                    ioffmat[j][i] = toff # diagonal matrix i->j is same as j->i
                     toff += 1
                     # print("i>=j",i,j,toff)
-                    pairs.append(str(j)+"-"+str(i))
+                    pairs.append(str(i)+"-"+str(j))
 print("Offset Matrix\n",ioffmat)
 print("Pairs\n",pairs)
 
@@ -291,7 +316,7 @@ for i in range(nbins):
                 # print(i,j,k,joff,fact,types[j+1],types[k+1],xpt)
                 if(j==k) :
                     histnorm[i][joff] *= 2.  # diagonal terms need a factor of 2
-#print(fact,histnorm[:2,:])
+
 histnorm[-1,1:] *= 2 # last value only is 1/2 volume so needs factor of 2 
 # create header for file
 hdr = ""
@@ -316,21 +341,22 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #print(natoms,box,pos,atypes)
     nconfig += 1
     print(f'Config: {nconfig} [{box[0]:.3f} {box[1]:.3f} {box[2]:.3f}]',end='',flush=True)
-    svol += box[0]*box[1]*box[2]
-    svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
-
+    vol = box[0]*box[1]*box[2]
+    svol += vol
+    svol2 += vol*vol
+    
     for it in range(ntypes):
         if(ioffmat[it+1][0] == -1):
-            ipos = pos[ngbrs[it]]
-            for jt in range(it,ntypes):
-                if(ioffmat[0][jt+1] == -1):
+            ipos = pos[ngbrs[it]]  # get itypes
+            for jt in range(ntypes):
+                if(ioffmat[0][jt+1] == -1 and jt>=it):
                     print(" ",it+1,"-",jt+1," ",sep='',end='',flush=True)
                     jbin = ioffmat[it+1][jt+1]
                     if(it==jt): # same type                        
                         for i in range(len(ipos)-1):
                             distbin(ipos[i+1:],ipos[i],jbin)
                     else: # different type
-                        jpos = pos[ngbrs[jt]]
+                        jpos = pos[ngbrs[jt]] # get jtypes
                         for i in range(len(ipos)):
                             distbin(jpos,ipos[i],jbin)
     print()
@@ -347,9 +373,9 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         tnow = time.time()
 
 avol = svol/nconfig
-stdvol = math.sqrt((svol2/nconfig - avol*avol))
+stdvol = math.sqrt(abs(svol2/nconfig - avol*avol)) # abs for roundoff err close to zero
 print("# configs read in:",nconfig," <vol> =",avol, "stdvol = ",stdvol)
-hdr += "\n <vol> " + str(avol) + " <(x-<x>)^2> = " + str(stdvol)
+hdr += "\n <vol> " + str(avol) + " sqrt(<(x-<x>)^2>) = " + str(stdvol)
 histnorm[:,1:] *= avol/nconfig
 savehist(outfile,hist,nconfig,hdr,histnorm)
 
