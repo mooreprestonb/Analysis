@@ -7,15 +7,15 @@ infile = "0.05_test.lammpstrj"
 outfile = "0.05_strip.lammpstrj"
 stride = 10 
 
-def readconfiglines():
+def readconfiglines(): #subroutine to read configuration lines
     lines[0] = lammpsfp.readline()
     if (lines[0].strip() != "ITEM: TIMESTEP"):
-        return 0 
+        return 0 # not read in... End of file...
     for i in range(1,nlines): # already read in first line
         lines[i] = lammpsfp.readline()
     return 1
 
-print(sys.argv)
+print(sys.argv[0],infile,outfile,stride)
 
 #readheader
 
@@ -32,19 +32,21 @@ if(head[2].strip() != "ITEM: NUMBER OF ATOMS"):
     print("Error: now atoms line found")
     exit(1)
 
-natoms = int(head[3])
-nlines = natoms+9
-lines = [None]*nlines
+natoms = int(head[3]) # set number of atoms
+nlines = natoms+9     # number of lines per configurations
+lines = [None]*nlines # allocate space
 
-lammpsoutfp = open(outfile,"w")
+lammpsoutfp = open(outfile,"w") # open output file
+
 nconf = 0
-while(readconfiglines()):
-    if(nconf%stride==0):
+while(readconfiglines()):  # loop over configurations
+    if(nconf%stride==0): # only write out every stride times
         for line in lines:
             lammpsoutfp.write(line)
-        print(nconf)
+        print("Config",nconf,"output") # report config written
     nconf += 1
 
 lammpsoutfp.close()
 lammpsfp.close()
-print(nconf," Configurations read in")
+
+print(nconf," Configurations read in\nDone")
