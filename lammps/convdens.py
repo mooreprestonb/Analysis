@@ -1,11 +1,9 @@
 #!/usr/bin/python3
 
-import sys
-import argparse
-import numpy
-import math
-import time
-import re
+import sys              # system arguments
+import argparse         # command line arguments
+import numpy            # numerical routines
+import re               # regular expressions
 
 #------------------------------------------------------------
 # read command line arg using argparser
@@ -62,7 +60,9 @@ elif (data.shape[1] == 5):
 else:
     print("# of data types doesn't match mass!",data.shape)
     exit(1)
-    
+
+print(mass)
+# .602214 = 6.02214x10^23/(1*x10^8)^3  atoms/bin to mol/cc
 fact = 1./(.602214*box[0]*box[1]*dz) # convert from n/bin to g/cc
 
 ws = numpy.sum(data[:,1:]*mass*fact,axis=1) # get weighted sum
