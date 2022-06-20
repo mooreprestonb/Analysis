@@ -1,13 +1,23 @@
 #!/usr/bin/python3
 # parse lammps log files
 
+import argparse
 import sys
 import numpy
 import matplotlib.pyplot as plt
 from scipy.stats import skew,kurtosis
 from scipy import stats
 
-fi = open(sys.argv[1],"r")
+# set command line arguments (for help use % prog -h)
+parser = argparse.ArgumentParser(description="Parse lammps log file and plot")
+parser.add_argument('input', help='lammps log file')
+#parser.add_argument('output',nargs='?',help='output file for fitted function')
+parser.add_argument('-p', default=False, action="store_true", dest="p",
+		    help="Show graphs (Default off)")
+
+args = parser.parse_args()  # get command line arguments
+
+fi = open(args.input,"r")
 lines = fi.readlines()
 fi.close()
 
@@ -36,12 +46,16 @@ for l in range(n):
     words = lines[ns+l].split()
     if(words[0].isdigit()==False):
         break
+    if(len(words) != nc):
+        print("data incomplete... will go with what we have so far")
+        break
     for i in range(nc):
         data[i][l] = float(words[i])
     nd += 1
 
 ndata = data[:,:nd] # slice out only data that we parsed
 
+print(header)
 print("#",sys.argv,len(header),"columns of data, with",nd,"lines of data")
 print("# column header   average         stdev        skew    kurtosis       min       max       range   [slop intercept]")
 for i in range(nc):
@@ -52,17 +66,18 @@ for i in range(nc):
     print(f'{i:3} {header[i]:8} {numpy.average(da):13.4f} {numpy.std(da):13.4f} {skew(da):10.4f} {kurtosis(da):10.4f} {dmin:10.4g} {dmax:10.4g} {dmax-dmin:10.4g} [{model[0]:10.4g} {model[1]:10.4g}]')
     #print(i,header[i],numpy.average(da),numpy.std(da),skew(da),kurtosis(da),dmin,dmax,dmax-dmin,model)
 
-    fn = numpy.arange(nd)
-    plt.figure()
-    plt.subplot(121)
-    plt.plot(fn,ndata[i])
-    plt.ylabel(header[i])
-    plt.xlabel("Frames")
-    plt.subplot(122)
-    hst, bins = numpy.histogram(ndata[i],bins="auto",density=True)
-    xdata = bins[:-1]+(bins[1]-bins[0])/2.0
-    plt.plot(xdata,hst)
-    kernel = stats.gaussian_kde(ndata[i])
-    plt.plot(xdata,kernel(xdata))
-    plt.xlabel(header[i])
-    plt.show()
+    if(args.p and (dmax != dmin)):
+        fn = numpy.arange(nd)
+        plt.figure()
+        plt.subplot(121)
+        plt.plot(fn,ndata[i])
+        plt.ylabel(header[i])
+        plt.xlabel("Frames")
+        plt.subplot(122)
+        hst, bins = numpy.histogram(ndata[i],bins="auto",density=True)
+        xdata = bins[:-1]+(bins[1]-bins[0])/2.0
+        plt.plot(xdata,hst)
+        kernel = stats.gaussian_kde(ndata[i])
+        plt.plot(xdata,kernel(xdata))
+        plt.xlabel(header[i])
+        plt.show()
