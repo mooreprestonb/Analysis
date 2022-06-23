@@ -53,27 +53,25 @@ ntypes = len(types)
 print("Types {type:#}:",ntypes,types)
 
 masses = numpy.loadtxt(massfile) # import mass data
-if (masses.shape[1] != 2):
-    print("Masses file",massfile,"has wrong format",masses.shape)
-    print(masses)
-    exit(1)
-    
 if(ntypes==1): # only 1 mass!
     print(ntypes,masses.size,masses)
     if(masses.size!=2):
         print("Only 1 mass type and more than 1 type listed?")
+        print(masses)
         exit(1)
     else:
         mass = numpy.array([masses[1]])
 else:
     if(masses.shape[0] != ntypes):
        print("types and number of masses don't match!",ntypes,masses.shape[0])
+       print(masses)
        exit(1)
     else:
        mass = numpy.zeros(ntypes)
        for i in range(ntypes):
            if(int(masses[i][0]) != i+1):
                print("Type out of order?",i,masses[i][0])
+               print(masses)
                exit(1)
            mass[i] = masses[i][1]
        
