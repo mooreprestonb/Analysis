@@ -234,10 +234,10 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         pt = pos[i][2]/dx
         ibin = int(pt)
         #print(i,ibin,pos[i][2]/dx,pos[i][2])
-        if(ibin<0 or ibin>=nbins):
+        if((ibin<0) or (ibin>(nbins-2))):
             print("Warning: atom position out of range",i,ibin,pos[i][2]/dx,pos[i],box[2])
             ibin = max(ibin,0)
-            ibin = min(ibin,nbins-1)
+            ibin = min(ibin,nbins-2)
         fr = pt-ibin
         hist[ibin  ][atypes[i]] += 1. - fr
         hist[ibin+1][atypes[i]] += fr

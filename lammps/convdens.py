@@ -12,6 +12,7 @@ parser.add_argument('input', help='input density file name')
 parser.add_argument('mass', help='mass file')
 parser.add_argument('output', help='output density file name')
 parser.add_argument('-u','--units',help='units (default = real)',choices=['real','lj'],default='real',nargs='?')
+parser.add_argument('-b','--box',help='box dimensions',nargs=3,type=float)
 
 # read in arguments, now translate to variables
 args = parser.parse_args()
@@ -33,7 +34,12 @@ f.close()
 words = h2.split()
 #print (words)
 dz = float(words[3])
-box = [float(words[5]),float(words[6]),float(words[7])]
+if(args.box == None):
+    print("Using system box for box length")
+    box = [float(words[5]),float(words[6]),float(words[7])]
+else:
+    box = args.box
+    
 nconf = int(words[-1])
 
 ntypes = int(words[8][6:])

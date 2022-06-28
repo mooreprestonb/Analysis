@@ -40,7 +40,7 @@ fvals, covar = curve_fit(model2g,x[1:-1],densp,p0=ivals)
 yf = model2g(x[1:-1],*fvals)
 
 print("fit",fvals,"h",h)
-stdint = 2.5
+stdint = 2.
 intface = numpy.zeros(4,dtype=int) # Take interface stdint stdev.
 intface[0] = int((fvals[1]-x[0])/h-stdint*fvals[2]/h)
 intface[1] = int((fvals[1]-x[0])/h+stdint*fvals[2]/h)
