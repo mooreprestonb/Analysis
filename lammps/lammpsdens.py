@@ -160,11 +160,26 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
                 print("ERROR! atom type change on",num+1)
     return 1 # read in configuration
 # end readlammpsconfig
+#------------------------------------------------------------
+def histo(natoms,pos,dx,nbins,hist):
+    for i in range(natoms):
+        #ibin = abin[i]
+        pt = pos[i][2]/dx
+        ibin = int(pt)
+        #print(i,ibin,pos[i][2]/dx,pos[i][2])
+        if((ibin<0) or (ibin>(nbins-2))):
+            print("Warning: atom position out of range",i,ibin,pos[i][2]/dx,pos[i],box[2])
+            ibin = max(ibin,0)
+            ibin = min(ibin,nbins-2)
+        fr = pt-ibin
+        hist[ibin  ][atypes[i]] += 1. - fr
+        hist[ibin+1][atypes[i]] += fr
+        #hist[ibin][atypes[i]] += 1
 
 #------------------------------------------------------------
-def savehist(outfile,hist,nconfig,hdr):
+def savehist(outfile,hist,nconfig,hdr,dnorm):
     data = numpy.array(hist)
-    data[:,1:] /= nconfig # normalize all but first column
+    data[:,1:] /= nconfig*dnorm # normalize all but first column
     hdr1 = hdr + " nconfigs: " + str(nconfig)
     numpy.savetxt(outfile,data,fmt='%g',header=hdr1)
 
@@ -184,6 +199,8 @@ parser.add_argument('input', help='input lammpstrj file')
 parser.add_argument('output', help='output data file name')
 parser.add_argument('-nbins',type=int,dest='nbins',default=100,help="Number of bins to use in histogram")
 parser.add_argument('-time',type=int,dest='time',default=10,help="Report and write progress every so many seconds")
+parser.add_argument('-hconf',type=int,dest='hconf',default=0,help="Restart average every hconf configs")
+parser.add_argument('-dens',type=bool,dest='dens',default=False,help="report density instead of counts (e.g. counts/(dx*dy*dz)")
 
 # read in arguments, now translate to variables
 args = parser.parse_args()
@@ -191,6 +208,8 @@ nbins = args.nbins
 configname = args.input # 'test.lammpstrj'
 outfile = args.output
 itime = args.time
+hconf = args.hconf
+dens = args.dens
 
 print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
@@ -212,6 +231,11 @@ hmin = 0 # min in the z (goes from 0 to z)
 dx = box[2]/(nbins-1)
 hist[:,0] = numpy.arange(hmin,dx*nbins+hmin,dx) # create bin values
 
+if (args.dens):
+    dnorm = box[0]*box[1]*dx
+else:
+    dnorm = 1
+
 # create header for file
 hdr = ""
 for i in range(len(sys.argv)):
@@ -224,33 +248,33 @@ f = open(configname,'r')
 nconfig = 0  # read initial configuration
 tnow = time.time()
 ttime = tnow
+    
 print("Processing ",configname)
 while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     #print(natoms,box,pos,atypes)
     nconfig += 1
     #abin = pos[:,2]/dx.astype(int)
-    for i in range(natoms):
-        #ibin = abin[i]
-        pt = pos[i][2]/dx
-        ibin = int(pt)
-        #print(i,ibin,pos[i][2]/dx,pos[i][2])
-        if((ibin<0) or (ibin>(nbins-2))):
-            print("Warning: atom position out of range",i,ibin,pos[i][2]/dx,pos[i],box[2])
-            ibin = max(ibin,0)
-            ibin = min(ibin,nbins-2)
-        fr = pt-ibin
-        hist[ibin  ][atypes[i]] += 1. - fr
-        hist[ibin+1][atypes[i]] += fr
-        #hist[ibin][atypes[i]] += 1
-
+    histo(natoms,pos,dx,nbins,hist)
     tnowi = time.time()
-    if(itime < tnowi-tnow):
-        runtime = tnowi-ttime
-        etime = runtime*nconf/nconfig
-        print('configs = {}/{} ~ {:2.1%}, time={:g}/{:g}'.format(nconfig,nconf,nconfig/nconf,runtime,etime))
-        savehist(outfile,hist,nconfig,hdr)
-        tnow = time.time()
+
+    if(hconf != 0):
+        if(nconfig%hconf==0):
+            runtime = tnowi-ttime
+            etime = runtime*nconf/nconfig
+            outfilen = outfile+"."+str(nconfig)
+            print('configs = {}/{} ~ {:2.1%}, time={:g}/{:g} '.format(nconfig,nconf,nconfig/nconf,runtime,etime),outfilen)
+            savehist(outfilen,hist,hconf,hdr,dnorm)
+            hist[:,1:] = 0 # set back to zero
+            tnow = time.time()
+    else:
+        if(itime < tnowi-tnow):
+            runtime = tnowi-ttime
+            etime = runtime*nconf/nconfig
+            print('configs = {}/{} ~ {:2.1%}, time={:g}/{:g} '.format(nconfig,nconf,nconfig/nconf,runtime,etime),outfile)
+            savehist(outfile,hist,nconfig,hdr,dnorm)
+            tnow = time.time()
 
 print("# configs read in:",nconfig)
 #print(hist)
-savehist(outfile,hist,nconfig,hdr)
+if(hconf ==0):
+    savehist(outfile,hist,nconfig,hdr,dnorm)
