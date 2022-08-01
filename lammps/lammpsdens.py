@@ -209,8 +209,9 @@ pos = numpy.zeros((natoms,3))
 atypes = numpy.zeros(natoms,dtype=int)
 hist = numpy.zeros((nbins,ntypes+1)) # types go from 1-n, 0 will be x
 hmin = 0 # min in the z (goes from 0 to z)
-dx = box[2]/(nbins-1)
-hist[:,0] = numpy.arange(hmin,dx*nbins+hmin,dx) # create bin values
+hmax = box[2]
+dx = box[2]/(nbins)
+hist[:,0] = numpy.arange(hmin,hmax,dx) # create bin values
 
 # create header for file
 hdr = ""
