@@ -64,7 +64,7 @@ if(args.p):
     plt.subplot(211)
     plt.plot(xdata,ydata,'bo',label='data') # load in data
     plt.plot(xdata,fit,'r-',label='fit, order='+str(args.order))  # fit data
-    plt.ylabel('Density (g/cc)')
+    plt.ylabel('y data')
     plt.legend()
     
     plt.subplot(212)  # residual
@@ -72,6 +72,6 @@ if(args.p):
     plt.ylabel('(data-fit)')
     plt.legend()
     
-    plt.xlabel('Molality')
+    plt.xlabel('x data')
     
     plt.show()
