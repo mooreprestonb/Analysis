@@ -176,7 +176,7 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     line = f.readline() # read "ITEM: ATOMS id type xs ys zs" (scaled coord)
     if (line.rstrip() == "ITEM: ATOMS id type xs ys zs"):
         ibox = 1
-    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"):
+    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"): # unscalled coord
         ibox = 2
     else:
         print("ERROR! 3th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
@@ -335,6 +335,7 @@ nconf = getlammpsnconf(configname,natoms) # count configurations
     
 # allocate arrays
 pos = numpy.zeros((natoms,3))
+icell = numpy.zeros((natoms,3),dtype=int)
 atypes = numpy.zeros(natoms,dtype=int)
 getlammpsatypes(configname,natoms,atypes)
 
@@ -372,7 +373,7 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         #print(i,noxy,ntype2,nconfig)
         #print(ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
-        rpos = pos2-pos[ii] # distance between O and all other O's
+        rpos = pos2-pos[ii] # distance between O and neighbors
         if(otype == type2):
             rpos = numpy.delete(rpos,i,axis=0) # remove self
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
