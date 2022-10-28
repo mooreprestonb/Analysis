@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-# calculate g(r) of all types from lammps traj
+# calculate g(dx,dy,dz) of all types from lammps traj from water
 
 import sys
 import argparse
@@ -176,7 +176,7 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     line = f.readline() # read "ITEM: ATOMS id type xs ys zs" (scaled coord)
     if (line.rstrip() == "ITEM: ATOMS id type xs ys zs"):
         ibox = 1
-    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"):
+    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"): # unscalled coord
         ibox = 2
     else:
         print("ERROR! 3th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
@@ -199,11 +199,12 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     return 1 # read in configuration
 # end readconfig
 #------------------------------------------
-def getvectwater(ii,pos,box,v):
-    r1 = pos[ii+1]-pos[ii] # H1-O
-    r2 = pos[ii+2]-pos[ii] # H2-O
+def getvectwater(ii,pos,box,v):  # assumes water is O,H,H in index
+    r1 = pos[ii+1]-pos[ii] # H1-OW
+    r2 = pos[ii+2]-pos[ii] # H2-OW
     r1 -= numpy.floor(r1/box+.5)*box # periodic boundary
     r2 -= numpy.floor(r2/box+.5)*box # periodic boundary
+    # get vectors that define molecular orientation
     v[0] = r2-r1 # H2-H1
     v[0] /= numpy.linalg.norm(v[0])
     v[2] = numpy.cross(v[0],(r1+r2))
@@ -284,7 +285,7 @@ def writedxfile(ofile,np,bins,gr3d,fact):
 
 #------------------------------------------------------------
 # read command line arg using argparser
-parser = argparse.ArgumentParser(description="Read in Lammps trajectory file and calculate g(r) for types")
+parser = argparse.ArgumentParser(description="Read in Lammps trajectory file and calculate 3d g(x,y,z) for types relative to water")
 parser.add_argument('input', help='input lammpstrj file')
 parser.add_argument('output', help='output data file name')
 parser.add_argument('-nbins',type=int,dest='nbins',default=20,help="Number of bins in each dimenstion")
@@ -334,6 +335,7 @@ nconf = getlammpsnconf(configname,natoms) # count configurations
     
 # allocate arrays
 pos = numpy.zeros((natoms,3))
+icell = numpy.zeros((natoms,3),dtype=int)
 atypes = numpy.zeros(natoms,dtype=int)
 getlammpsatypes(configname,natoms,atypes)
 
@@ -371,7 +373,7 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         #print(i,noxy,ntype2,nconfig)
         #print(ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
-        rpos = pos2-pos[ii] # distance between O and all other O's
+        rpos = pos2-pos[ii] # distance between O and neighbors
         if(otype == type2):
             rpos = numpy.delete(rpos,i,axis=0) # remove self
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
@@ -381,9 +383,11 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         tnowi = time.time()
         if(itime < tnowi-tnow):
             runtime = tnowi-ttime
-            etime = runtime*nconf/nconfig
+            fracO = i/noxy
+            perdone = (fracO+nconfig-1)/nconf
+            etime = runtime/perdone
             avol = svol/nconfig
-            print('otype = {}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,noxy,nconfig,nconf,nconfig/nconf,runtime,etime,avol))
+            print('otype = {}/{}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,noxy,nconfig,nconf,perdone,runtime,etime,avol))
             fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
             writedxfile(outfile,np,bins,gr3d,fact)
             #print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)

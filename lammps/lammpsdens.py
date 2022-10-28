@@ -167,10 +167,12 @@ def histo(natoms,pos,dx,nbins,hist):
         pt = pos[i][2]/dx
         ibin = int(pt)
         #print(i,ibin,pos[i][2]/dx,pos[i][2])
-        if((ibin<0) or (ibin>(nbins-2))):
-            print("Warning: atom position out of range",i,ibin,pos[i][2]/dx,pos[i],box[2])
-            ibin = max(ibin,0)
-            ibin = min(ibin,nbins-2)
+        if(ibin<0):
+            print("Warning: atom position below range",i,ibin,pos[i][2]/dx,pos[i],box[2])
+            ibin = 0
+        if(ibin > nbins-2):
+            print("Warning: atom position above range",i,ibin,pos[i][2]/dx,pos[i],box[2])
+            ibin = nbins-2
         fr = pt-ibin
         hist[ibin  ][atypes[i]] += 1. - fr
         hist[ibin+1][atypes[i]] += fr
@@ -183,24 +185,16 @@ def savehist(outfile,hist,nconfig,hdr,dnorm):
     hdr1 = hdr + " nconfigs: " + str(nconfig)
     numpy.savetxt(outfile,data,fmt='%g',header=hdr1)
 
-    # hist[:,1:] /= box[0]*box[1]*dx
-# average and normalize
-#for i in range(nbins):
-#    hist[i][0] = dx*i + hmin
-#    for j in range(1,ntypes+1):
-#        hist[i][j] /= nconfig
-# hist[i][j] /= types[j]
-# might want div by box[0]*box[1]*dx to norm density
-
 #------------------------------------------------------------
 # read command line arg using argparser
 parser = argparse.ArgumentParser(description="Read in Lammps trajectory file and calculate histogram of types along z")
 parser.add_argument('input', help='input lammpstrj file')
 parser.add_argument('output', help='output data file name')
-parser.add_argument('-nbins',type=int,dest='nbins',default=100,help="Number of bins to use in histogram")
-parser.add_argument('-time',type=int,dest='time',default=10,help="Report and write progress every so many seconds")
-parser.add_argument('-hconf',type=int,dest='hconf',default=0,help="Restart average every hconf configs")
-parser.add_argument('-dens',type=bool,dest='dens',default=False,help="report density instead of counts (e.g. counts/(dx*dy*dz)")
+parser.add_argument('-nbins',type=int,dest='nbins',default=100,help="Number of bins to use in histogram (default 100)")
+parser.add_argument('-time',type=int,dest='time',default=10,help="Report and write progress every so many seconds (default 10)")
+parser.add_argument('-hconf',type=int,dest='hconf',default=0,help="Restart average every hconf configs (default 0)")
+#parser.add_argument('--dens',action=argparse.BooleanOptionalAction,help="Report density instead of counts (e.g. counts/(dx*dy*dz)")
+parser.add_argument('--dens',action='store_true',default=False,help="Report density instead of counts (e.g. counts/(dx*dy*dz) (default False)")
 
 # read in arguments, now translate to variables
 args = parser.parse_args()
@@ -228,8 +222,9 @@ pos = numpy.zeros((natoms,3))
 atypes = numpy.zeros(natoms,dtype=int)
 hist = numpy.zeros((nbins,ntypes+1)) # types go from 1-n, 0 will be x
 hmin = 0 # min in the z (goes from 0 to z)
-dx = box[2]/(nbins-1)
-hist[:,0] = numpy.arange(hmin,dx*nbins+hmin,dx) # create bin values
+hmax = box[2]
+dx = box[2]/(nbins-1) # make dx a little smaller so we don't have errors going over
+hist[:,0] = numpy.linspace(hmin,hmax,num=nbins,endpoint=True) # create bin values
 
 if (args.dens):
     dnorm = box[0]*box[1]*dx
