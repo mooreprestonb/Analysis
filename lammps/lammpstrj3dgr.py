@@ -217,8 +217,14 @@ def ngbr(box,pos2,icell,ncell,cellatms,maxngbr): # get subcells from positions f
     for i in range(ntype2):
         ic = (pos2[i]/box*ncell).astype(int)
         icell[i] = ic
-        cellatms[ic[0][ic[1][ic[2][0] += 1
-        idx = cellatms[ic[0][ic[1][ic[2][0]
+        ic[0] = min(ic[0],ncell[0]-1)
+        ic[1] = min(ic[1],ncell[1]-1)
+        ic[2] = min(ic[2],ncell[2]-1)
+        ic[0] = max(ic[0],0)
+        ic[1] = max(ic[1],0)
+        ic[2] = max(ic[2],0)
+        cellatms[ic[0]][ic[1]][ic[2]][0] += 1
+        idx = cellatms[ic[0]][ic[1]][ic[2]][0]
         if(idx==maxngbr):
             print("ERROR: Max number of atoms/cell exceeded, increase padding")
             exit(1)
