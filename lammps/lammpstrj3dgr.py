@@ -34,14 +34,11 @@ def getlammpsbox(configname): # box in lammps traj
     if (line.rstrip()[:16] != "ITEM: BOX BOUNDS"):
         print("ERROR! 3rd line not \"ITEM: BOX BOUNDS pp pp pp\"")
         exit(1)
-    line = f.readline() # xlo xhi
-    data = line.split()
+    data = f.readline().split() # xlo xhi
     box[0] = float(data[1])-float(data[0])
-    line = f.readline() # ylo yhi
-    data = line.split()
+    data = f.readline().split() # ylo yhi
     box[1] = float(data[1])-float(data[0])
-    line = f.readline() # zlo zhi
-    data = line.split()
+    data = f.readline().split() # zlo zhi
     box[2] = float(data[1])-float(data[0])
 
     f.close()
@@ -65,9 +62,13 @@ def getlammpstypes(configname,natoms): # find # types in lammps traj
     f = open(configname,'r')
     for i in range(9): # readover header
         lines = f.readline()
+
+    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
     for i in range(natoms): # readover header
-        ntype = int(f.readline().split()[1]) # get atom type
-        # print(ntype)
+#        ntype = int(f.readline().split()[1]) # get atom type
+        ttype = f.readline().split()[0]
+        ntype = atyped[ttype]
+        # print(ttype,ntype)
         if ntype in types: # add types 
             types[ntype] += 1
         else :
@@ -79,11 +80,13 @@ def getlammpsatypes(configname,natoms,atypes): # find type of each atom in lammp
     f = open(configname,'r')
     for i in range(9): # readover header
         lines = f.readline()
+    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
     for i in range(natoms): # readover  header
         words = f.readline().split()
-        indx = int(words[0])-1 # atom index
-        itype = int(words[1]) # get atom type
-        atypes[indx] = itype
+#        indx = int(words[0])-1 # atom index
+#        itype = int(words[1]) # get atom type
+#        atypes[indx] = itype
+        atypes[i] = atyped[words[0]]
     f.close()
 #------------------------------------------------------------ 
 def getlammpsatoms(configname): # find # atoms in lammps header
@@ -163,14 +166,18 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
     if (line.rstrip()[:16] != "ITEM: BOX BOUNDS"):
         print("ERROR! 5th line not \"ITEM: BOX BOUNDS pp pp pp\"")
         exit(1)
-    line = f.readline() # xlo xhi
-    data = line.split()
+
+    boxlo = numpy.zeros(3)
+    data = f.readline().split() # xlo xhi
+    boxlo[0] = float(data[0])
     box[0] = float(data[1])-float(data[0])
-    line = f.readline() # ylo yhi
-    data = line.split()
+
+    data = f.readline().split() # ylo yhi
+    boxlo[1] = float(data[0])
     box[1] = float(data[1])-float(data[0])
-    line = f.readline() # zlo zhi
-    data = line.split()
+
+    data = f.readline().split() # zlo zhi
+    boxlo[2] = float(data[0])
     box[2] = float(data[1])-float(data[0])
     
     line = f.readline() # read "ITEM: ATOMS id type xs ys zs" (scaled coord)
@@ -178,26 +185,78 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
         ibox = 1
     elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"): # unscalled coord
         ibox = 2
+    elif (line.rstrip() == "ITEM: ATOMS element x y z"): # unscalled w/ element
+        ibox = 3
     else:
-        print("ERROR! 3th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
-        print("\"ITEM: ATOMS id type x y z ix iy iz\"")
+        print("ERROR! 9th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
+        print("\"ITEM: ATOMS id type x y z ix iy iz\" or ")
+        print("\"ITEM: ATOMS element x y z\"")
         exit(1)
         
     # loop over atoms
     for i in range(natoms):
-        line = f.readline()
-        data = line.split()
-        num = int(data[0])-1 # lammps id's start with 1
-        pos[num][0] = float(data[2])
-        pos[num][1] = float(data[3])
-        pos[num][2] = float(data[4])
-        if(ibox ==1):
-            pos[num] *= box
-        if(atypes[num] != int(data[1])):
-            print("ERROR! atom type changed on",num+1," Config:",config)
-            exit(1)
+        data = f.readline().split()
+        if(ibox==3):
+            num = i 
+            pos[num] = [float(data[1]),float(data[2]),float(data[3])]
+        else:
+            num = int(data[0])-1 # lammps id's start with 1
+            pos[num] = [float(data[2]),float(data[3]),float(data[4])]
+            if(ibox==1):
+                pos[num] *= box
+            if(atypes[num] != int(data[1])):
+                print("ERROR! atom type changed on",num+1," Config:",config)
+                exit(1)
+    pos -= boxlo
     return 1 # read in configuration
 # end readconfig
+#------------------------------------------head
+def ngbr(box,pos2,icell,ncell,cellatms,maxngbr): # get subcells from positions for neighbor calculations
+
+    ntype2 = len(pos2)
+    for i in range(ntype2):
+        ic = (pos2[i]/box*ncell).astype(int)
+        icell[i] = ic
+        cellatms[ic[0][ic[1][ic[2][0] += 1
+        idx = cellatms[ic[0][ic[1][ic[2][0]
+        if(idx==maxngbr):
+            print("ERROR: Max number of atoms/cell exceeded, increase padding")
+            exit(1)
+        cellatms[icell[i][0]][icell[i][1]][icell[i][2]][idx] = i
+#------------------------------------------
+def  getngbrindx(ii,idcell,ncell,cellatms): # get the ngbr indicies
+
+    nl = cellatms[idcell[0]][idcell[1]][idcell[2]][0]
+    indl = cellatms[idcell[0]][idcell[1]][idcell[2]][1:nl+1]
+    indl = indl[indl != ii] # remove self if there
+    asize = len(indl)
+    for i in [-1,0,1]:
+        ii = idcell[0]+i
+        if (ii<0):
+            ii = ncell[0]-1
+        if(ii==ncell[0]):
+            ii = 0
+        for j in [-1,0,1]:
+            jj = idcell[1]+j
+            if (jj<0):
+                jj = ncell[1]-1
+            if(jj==ncell[1]):
+                jj = 0
+            for k in [-1,0,1]:
+                kk = idcell[2]+k
+                if (kk<0):
+                    kk  = ncell[2]-1
+                if(kk==ncell[2]):
+                    kk = 0
+                if( not (i==0 and j==0 and k==0)):
+                    #print(i,j,k,ii,jj,kk)
+                    nl = cellatms[ii][jj][kk][0]
+                    asize += nl 
+                    indl = numpy.append(indl,cellatms[ii][jj][kk][1:nl+1])
+
+    #print(asize,len(indl),indl)
+    return indl
+
 #------------------------------------------
 def getvectwater(ii,pos,box,v):  # assumes water is O,H,H in index
     r1 = pos[ii+1]-pos[ii] # H1-OW
@@ -313,7 +372,7 @@ bins = numpy.zeros((3,3))
 bins[0] = rmin
 bins[1] = rmax
 bins[2] = (bins[1]-bins[0])/np
-print(bins)
+#print(bins)
 
 print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
@@ -335,7 +394,6 @@ nconf = getlammpsnconf(configname,natoms) # count configurations
     
 # allocate arrays
 pos = numpy.zeros((natoms,3))
-icell = numpy.zeros((natoms,3),dtype=int)
 atypes = numpy.zeros(natoms,dtype=int)
 getlammpsatypes(configname,natoms,atypes)
 
@@ -348,6 +406,14 @@ noxy = oidx.size
 ntype2 = indx2.size
 print("Number of Otypes found = ",noxy,"Number of type 2 =",ntype2)
 print(oidx,indx2)
+
+# ngbr lists
+icell = numpy.zeros((natoms,3),dtype=int)
+ncell = numpy.array(box/max(rmax,-rmin),dtype=int)
+#ncell= numpy.array([int(box[0]/(rmax-rmin)),int(box[1]/(rmax-rmin)),int(box[2]/(rmax-rmin))],dtype=int)
+ncells = numpy.product(ncell)
+maxngbr = int(ntype2/ncells*1.5+10) # average density with a little padding
+cellatms = numpy.zeros((ncell[0],ncell[1],ncell[2],maxngbr),dtype=int)
 
 v = numpy.zeros((3,3))
 rpos = numpy.zeros((ntype2,3))
@@ -367,15 +433,19 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
     pos2 = numpy.take(pos,indx2,axis=0)
+    ngbr(box,pos2,icell,ncell,cellatms,maxngbr)
+
     for i in range(noxy):
         ii = oidx[i]
         getvectwater(ii,pos,box,v) # get verticies of water molecule
         #print(i,noxy,ntype2,nconfig)
         #print(ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
+        indl = getngbrindx(ii,icell[ii],ncell,cellatms)
+        pos2 = numpy.take(pos,indl,axis=0)
         rpos = pos2-pos[ii] # distance between O and neighbors
-        if(otype == type2):
-            rpos = numpy.delete(rpos,i,axis=0) # remove self
+        #        if(otype == type2):
+        #            rpos = numpy.delete(rpos,i,axis=0) # remove self
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
         rpos = numpy.inner(rpos,v) # distance along each vecticies
         bingr3d(rpos,np,bins,gr3d) # create density plot
@@ -401,3 +471,4 @@ print("Otypes:",otype,"with ",noxy,"molecules and type2",type2," with",ntype2)
 fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
 writedxfile(outfile,np,bins,gr3d,fact)
 print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
+print("Done!")
