@@ -63,11 +63,12 @@ def getlammpstypes(configname,natoms): # find # types in lammps traj
     for i in range(9): # readover header
         lines = f.readline()
 
-    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
+#    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
+
     for i in range(natoms): # readover header
-#        ntype = int(f.readline().split()[1]) # get atom type
-        ttype = f.readline().split()[0]
-        ntype = atyped[ttype]
+        ntype = int(f.readline().split()[1]) # get atom type
+#        ttype = f.readline().split()[0]
+#        ntype = atyped[ttype]
         # print(ttype,ntype)
         if ntype in types: # add types 
             types[ntype] += 1
@@ -80,13 +81,13 @@ def getlammpsatypes(configname,natoms,atypes): # find type of each atom in lammp
     f = open(configname,'r')
     for i in range(9): # readover header
         lines = f.readline()
-    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
+#    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
     for i in range(natoms): # readover  header
         words = f.readline().split()
-#        indx = int(words[0])-1 # atom index
-#        itype = int(words[1]) # get atom type
-#        atypes[indx] = itype
-        atypes[i] = atyped[words[0]]
+        indx = int(words[0])-1 # atom index
+        itype = int(words[1]) # get atom type
+        atypes[indx] = itype
+#        atypes[i] = atyped[words[0]]
     f.close()
 #------------------------------------------------------------ 
 def getlammpsatoms(configname): # find # atoms in lammps header
@@ -208,60 +209,91 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
                 print("ERROR! atom type changed on",num+1," Config:",config)
                 exit(1)
     pos -= boxlo
+    pos -= numpy.floor(pos/box)*box  # periodic boundary
     return 1 # read in configuration
 # end readconfig
 #------------------------------------------head
 def ngbr(box,pos2,icell,ncell,cellatms,maxngbr): # get subcells from positions for neighbor calculations
 
     ntype2 = len(pos2)
+    cellatms[:,:,:,0] = 0  # zero ngbr list
     for i in range(ntype2):
-        ic = (pos2[i]/box*ncell).astype(int)
-        icell[i] = ic
-        ic[0] = min(ic[0],ncell[0]-1)
-        ic[1] = min(ic[1],ncell[1]-1)
-        ic[2] = min(ic[2],ncell[2]-1)
-        ic[0] = max(ic[0],0)
-        ic[1] = max(ic[1],0)
-        ic[2] = max(ic[2],0)
-        cellatms[ic[0]][ic[1]][ic[2]][0] += 1
-        idx = cellatms[ic[0]][ic[1]][ic[2]][0]
-        if(idx==maxngbr):
-            print("ERROR: Max number of atoms/cell exceeded, increase padding")
+        ic = (pos2[i]/box*ncell).astype(int)  # cell index
+        if((ic>=ncell).any() or (ic<0).any()):
+            print("ERROR in ngbr",ic,i,pos[i],box,ncell)  # are we out of bounds?
             exit(1)
-        cellatms[icell[i][0]][icell[i][1]][icell[i][2]][idx] = i
+        icell[i] = ic # set cell id
+        cellatms[ic[0]][ic[1]][ic[2]][0] += 1  # increase cell count by 1
+        nl = cellatms[ic[0]][ic[1]][ic[2]][0] # get number of neighbors so far
+        if(nl==maxngbr):
+            maxngbr *= 2
+            print("Warning: Max number of atoms/cell exceeded, increasing padding",nl,maxngbr,ic)
+            exit()
+            #cellatms = numpy.resize(cellatms,(ncell[0],ncell[1],ncell[2],maxngbr))
+        cellatms[ic[0]][ic[1]][ic[2]][nl] = i  # cell neighbor index into cell list
 #------------------------------------------
-def  getngbrindx(ii,idcell,ncell,cellatms): # get the ngbr indicies
+def getcellngbr(ncell):  # get cell indicies of ngbrs
+    
+    cellngbr = numpy.zeros((ncell[0],ncell[1],ncell[2],26,3),dtype=int)
 
+    for l in range(ncell[0]):
+        for m in range(ncell[1]):
+            for n in range(ncell[2]):
+                ingbr = 0
+                for i in [-1,0,1]:
+                    ii = l+i
+                    if (ii<0):
+                        ii = ncell[0]-1
+                    if(ii==ncell[0]):
+                        ii = 0
+                    for j in [-1,0,1]:
+                        jj = m+j
+                        if (jj<0):
+                            jj = ncell[1]-1
+                        if(jj==ncell[1]):
+                            jj = 0
+                        for k in [-1,0,1]:
+                            kk = k+n
+                            if (kk<0):
+                                kk  = ncell[2]-1
+                            if(kk==ncell[2]):
+                                kk = 0
+                            if( not (i==0 and j==0 and k==0)): # don't include self
+                                # print(ingbr,l,m,n,i,j,k,ii,jj,kk) 
+                                cellngbr[l][m][n][ingbr] = [ii,jj,kk]
+                                ingbr += 1
+    return cellngbr
+#------------------------------------------
+def  getngbrindx(ival,idcell,ncell,cellatms,cellngbr,indl): # get the ngbr indicies
+
+    maxl = len(indl)
     nl = cellatms[idcell[0]][idcell[1]][idcell[2]][0]
-    indl = cellatms[idcell[0]][idcell[1]][idcell[2]][1:nl+1]
-    indl = indl[indl != ii] # remove self if there
-    asize = len(indl)
-    for i in [-1,0,1]:
-        ii = idcell[0]+i
-        if (ii<0):
-            ii = ncell[0]-1
-        if(ii==ncell[0]):
-            ii = 0
-        for j in [-1,0,1]:
-            jj = idcell[1]+j
-            if (jj<0):
-                jj = ncell[1]-1
-            if(jj==ncell[1]):
-                jj = 0
-            for k in [-1,0,1]:
-                kk = idcell[2]+k
-                if (kk<0):
-                    kk  = ncell[2]-1
-                if(kk==ncell[2]):
-                    kk = 0
-                if( not (i==0 and j==0 and k==0)):
-                    #print(i,j,k,ii,jj,kk)
-                    nl = cellatms[ii][jj][kk][0]
-                    asize += nl 
-                    indl = numpy.append(indl,cellatms[ii][jj][kk][1:nl+1])
+    slist = cellatms[idcell[0]][idcell[1]][idcell[2]][1:nl+1]
+    if(ival == -1):  # different types will not have self
+        tngbr = nl
+    else:
+        slist = slist[slist != ival] # remove self if there
+        tngbr = len(slist)
+        if(nl != tngbr+1):
+            print("Error: More than 1 self atoms?",nl)
+            exit(1)
+    indl[0:tngbr] = slist
+    for i in range(26):
+        ingbr = cellngbr[idcell[0]][idcell[1]][idcell[2]][i]
+        ii = ingbr[0]
+        jj = ingbr[1]
+        kk = ingbr[2]
+        nl = cellatms[ii][jj][kk][0]
+        if(tngbr+nl > maxl):
+            print("Warning: expanding maxl",maxl,(tngbr+nl)*2,nl,tngbr)
+            maxl = (tngbr+nl)*2
+            indl = numpy.resize(indl,maxl)
+        # print(ingbr,i,tngbr,nl,maxl,indl[tngbr:tngbr+nl],cellatms[ii][jj][kk])
+        indl[tngbr:tngbr+nl] = cellatms[ii][jj][kk][1:nl+1]
+        tngbr += nl 
 
     #print(asize,len(indl),indl)
-    return indl
+    return tngbr
 
 #------------------------------------------
 def getvectwater(ii,pos,box,v):  # assumes water is O,H,H in index
@@ -327,9 +359,9 @@ def writedxfile(ofile,np,bins,gr3d,fact):
     f.write(hdr)
     hdr = "object 1 class gridpositions counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
     f.write(hdr)
-    hdr = "origin " + str(bins[0][0]) + " " + str(bins[0][1]) + " " + str(bins[0][2]) +"\n"
+    hdr = "origin " + str(bins[0]) + " " + str(bins[0]) + " " + str(bins[0]) +"\n"
     f.write(hdr)
-    hdr = "delta "+str(bins[2][0])+" 0 0\ndelta 0 "+str(bins[2][1])+" 0\ndelta 0 0 "+str(bins[2][2])+"\n"
+    hdr = "delta "+str(bins[2])+" 0 0\ndelta 0 "+str(bins[2])+" 0\ndelta 0 0 "+str(bins[2])+"\n"
     f.write(hdr)
     hdr = "object 2 class gridconnections counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
     f.write(hdr)
@@ -356,7 +388,6 @@ parser.add_argument('output', help='output data file name')
 parser.add_argument('-nbins',type=int,dest='nbins',default=20,help="Number of bins in each dimenstion")
 parser.add_argument('-time',type=int,dest='time',default=10,help="Report and write progress every so many seconds")
 parser.add_argument('-max',type=float,dest='rmax',default=10,help="Max distancs in g(r)")
-parser.add_argument('-min',type=float,dest='rmin',default=-10,help="Min distance in g(r)")
 parser.add_argument('-type1', type=int, dest='type1',default=1,help="Water Oxygen atoms type")
 parser.add_argument('-type2', type=int, dest='type2',default=1,help="type to bin against water")
 
@@ -368,17 +399,17 @@ configname = args.input # 'test.lammpstrj'
 outfile = args.output
 itime = args.time
 rmax = args.rmax
-rmin = args.rmin
+rmin = -rmax
 otype = args.type1
 type2 = args.type2
 
 #Grids
 np = numpy.array([nbins,nbins,nbins])
-bins = numpy.zeros((3,3))
-bins[0] = rmin
+bins = numpy.zeros(3)
+bins[0] = -rmax
 bins[1] = rmax
-bins[2] = (bins[1]-bins[0])/np
-#print(bins)
+bins[2] = 2.*rmax/(nbins-1) # should this be (nbins-1)?
+print(bins)
 
 print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
@@ -415,11 +446,12 @@ print(oidx,indx2)
 
 # ngbr lists
 icell = numpy.zeros((natoms,3),dtype=int)
-ncell = numpy.array(box/max(rmax,-rmin),dtype=int)
-#ncell= numpy.array([int(box[0]/(rmax-rmin)),int(box[1]/(rmax-rmin)),int(box[2]/(rmax-rmin))],dtype=int)
+ncell = numpy.array(box/rmax,dtype=int)
 ncells = numpy.product(ncell)
-maxngbr = int(ntype2/ncells*1.5+10) # average density with a little padding
+cellngbr = getcellngbr(ncell)
+maxngbr = int(ntype2/ncells*1.5+10)*2 # average density with a little padding
 cellatms = numpy.zeros((ncell[0],ncell[1],ncell[2],maxngbr),dtype=int)
+indl = numpy.zeros(maxngbr*27,dtype=int)
 
 v = numpy.zeros((3,3))
 rpos = numpy.zeros((ntype2,3))
@@ -438,20 +470,26 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     svol += box[0]*box[1]*box[2]
     svol2 += box[0]*box[1]*box[2]*box[0]*box[1]*box[2]
 
-    pos2 = numpy.take(pos,indx2,axis=0)
-    ngbr(box,pos2,icell,ncell,cellatms,maxngbr)
-
-    for i in range(noxy):
+    pos2 = numpy.take(pos,indx2,axis=0)      # get type 2 positions
+    ngbr(box,pos2,icell,ncell,cellatms,maxngbr) # sort type 2 pos into cells
+    ival = -1
+    
+    for i in range(noxy): # loop over all type 1 (Water Oxygens)
         ii = oidx[i]
         getvectwater(ii,pos,box,v) # get verticies of water molecule
-        #print(i,noxy,ntype2,nconfig)
-        #print(ii,pos[ii],pos[ii+1],pos[ii+2])
+        ic = (pos[ii]/box*ncell).astype(int)  # ii cell index
+        #print(i,noxy,ntype2,nconfig,ii,pos[ii],pos[ii+1],pos[ii+2])
         #writevmd(ii,pos,v)
-        indl = getngbrindx(ii,icell[ii],ncell,cellatms)
-        pos2 = numpy.take(pos,indl,axis=0)
-        rpos = pos2-pos[ii] # distance between O and neighbors
-        #        if(otype == type2):
-        #            rpos = numpy.delete(rpos,i,axis=0) # remove self
+        if(otype == type2):
+            ivals = numpy.where(indx2==ii)
+            if(len(ivals) !=1):
+                print("Error, found two of the same indices?",ii,indx2,ivals)
+                exit(1)
+            ival = ivals[0]
+            # print(ii,pos[ii],ival,pos2[ival])
+        ingbr = getngbrindx(ival,ic,ncell,cellatms,cellngbr,indl)#ngbr indxs of cell from pos2
+        posn = numpy.take(pos2,indl[0:ingbr],axis=0) # position of neighbors
+        rpos = posn-pos[ii] # distance between O and neighbors
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
         rpos = numpy.inner(rpos,v) # distance along each vecticies
         bingr3d(rpos,np,bins,gr3d) # create density plot
@@ -464,7 +502,8 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
             etime = runtime/perdone
             avol = svol/nconfig
             print('otype = {}/{}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,noxy,nconfig,nconf,perdone,runtime,etime,avol))
-            fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
+            lgrid = (bins[1]-bins[0])
+            fact = 1./(3*noxy*nconfig*lgrid*lgrid*lgrid)
             writedxfile(outfile,np,bins,gr3d,fact)
             #print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
             tnow = time.time()
@@ -474,7 +513,8 @@ stdvol = math.sqrt((svol2/nconfig - avol*avol))
 print("# configs read in:",nconfig," <vol> =",avol, "stdvol = ",stdvol)
 print("Otypes:",otype,"with ",noxy,"molecules and type2",type2," with",ntype2)
 
-fact = 1./(3*noxy*nconfig*bins[2][0]*bins[2][1]*bins[2][2])
+lgrid = bins[1]-bins[0]
+fact = 1./(3*noxy*nconfig*lgrid*lgrid*lgrid)
 writedxfile(outfile,np,bins,gr3d,fact)
 print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
 print("Done!")
