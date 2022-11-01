@@ -111,35 +111,6 @@ def getlammpsatoms(configname): # find # atoms in lammps header
     natms = int(line)
     f.close()
     return(natms)
-
-#------------------------------------------------------------
-def getngrblist(configname): # find interacting atoms and types
-    f = open(configname,'r')
-
-    line = f.readline() # read header or EOF
-    if (line==""): # end of file! EOF!
-        print("EOF while reading header?!?")
-        return 0
-    if (line.rstrip() != "ITEM: TIMESTEP"):
-        print("ERROR! first line of config is not \"ITEM: TIMESTEP\"")
-        exit(1)
-    line = f.readline() # read timestep
-    ts = int(line)
-
-    line = f.readline() # read "ITEM: NUMBER OF ATOMS"
-    if (line.rstrip() != "ITEM: NUMBER OF ATOMS"):
-        print("ERROR! 3rd line of config is not \"ITEM: NUMBER OF ATOMS\"")
-        exit(1)
-    line = f.readline() # natoms
-    natms = int(line)
-    f.close()
-    # should use fancy array indexing to get only what we want :-)
-    # for i in range(natoms):
-    #     if(ioffmat[atypes[j]][0] == -1):
-    #          indexarray.append(j)
-    #          jtypes.append(atypes[j])
-
-    return(indexarray,jypes)
 #------------------------------------------------------------
 def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
 
@@ -209,7 +180,7 @@ def readconfig(f,natoms,box,pos,atypes,config): # read lammps configuration
                 print("ERROR! atom type changed on",num+1," Config:",config)
                 exit(1)
     pos -= boxlo
-    pos -= numpy.floor(pos/box)*box  # periodic boundary
+    pos -= numpy.floor(pos/box)*box # periodic boundary
     return 1 # read in configuration
 # end readconfig
 #------------------------------------------head
@@ -265,7 +236,6 @@ def getcellngbr(ncell):  # get cell indicies of ngbrs
     return cellngbr
 #------------------------------------------
 def  getngbrindx(ival,idcell,ncell,cellatms,cellngbr,indl): # get the ngbr indicies
-
     maxl = len(indl)
     nl = cellatms[idcell[0]][idcell[1]][idcell[2]][0]
     slist = cellatms[idcell[0]][idcell[1]][idcell[2]][1:nl+1]
@@ -291,7 +261,6 @@ def  getngbrindx(ival,idcell,ncell,cellatms,cellngbr,indl): # get the ngbr indic
         # print(ingbr,i,tngbr,nl,maxl,indl[tngbr:tngbr+nl],cellatms[ii][jj][kk])
         indl[tngbr:tngbr+nl] = cellatms[ii][jj][kk][1:nl+1]
         tngbr += nl 
-
     #print(asize,len(indl),indl)
     return tngbr
 
@@ -352,7 +321,7 @@ def bingr3d(pt,np,bins,gr3d):
 #-----------------------------------------------------------
 def writedxfile(ofile,np,bins,gr3d,fact):
     #open file to write
-    print("Creating file :",ofile)
+    # print("Creating file :",ofile)
     f = open(ofile,"w")
     #print header
     hdr = "# opendx file for testing with 3dgr\n"
@@ -408,8 +377,7 @@ np = numpy.array([nbins,nbins,nbins])
 bins = numpy.zeros(3)
 bins[0] = -rmax
 bins[1] = rmax
-bins[2] = 2.*rmax/(nbins-1) # should this be (nbins-1)?
-print(bins)
+bins[2] = 2.*rmax/(nbins-1) # should this be nbins?
 
 print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
