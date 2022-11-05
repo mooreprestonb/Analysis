@@ -318,10 +318,31 @@ def bingr3d(pt,np,bins,gr3d):
     ptn = (ptn-bins[0])/bins[2] # get bin numbers
     nr = numpy.floor(ptn).astype(int) # get integer bin numbers
     ptn -= nr # get fraction of bin
+
     np2=np-1
-    for i in range(len(nr)): # loop over vectors, total sum = 12
-        nri = nr[i]
-        ptt = ptn[i]
+    ngi = numpy.where(numpy.all(nr>=0,axis=1) & numpy.all(nr<np2,axis=1)==True)[0] #index of cells in range
+    nre = numpy.take(nr,ngi,axis=0)   # get subset of those within
+    pte = numpy.take(ptn,ngi,axis=0)  # get subset of those within
+
+    for i in range(len(nre)): # loop over vectors in range, total sum = 12
+        nri = nre[i]
+        ptt = pte[i]
+
+        gr3d[nri[0]][nri[1]][nri[2]] += (1.-ptt[0])+(1.-ptt[1])+(1.-ptt[2]) # [0 0 0] 
+        gr3d[nri[0]][nri[1]][nri[2]+1] += (1.-ptt[0])+(1.-ptt[1])+(ptt[2])  # [0 0 1]
+        gr3d[nri[0]][nri[1]+1][nri[2]] += (1.-ptt[0])+(ptt[1])+(1.-ptt[2])  # [0 1 0]
+        gr3d[nri[0]][nri[1]+1][nri[2]+1] += (1.-ptt[0])+(ptt[1])+(ptt[2])   # [0 1 1]
+        gr3d[nri[0]+1][nri[1]][nri[2]] += (ptt[0])+(1.-ptt[1])+(1.-ptt[2])  # [1 0 0]
+        gr3d[nri[0]+1][nri[1]][nri[2]+1] += (ptt[0])+(1.-ptt[1])+(ptt[2])   # [1 0 1]
+        gr3d[nri[0]+1][nri[1]+1][nri[2]] += (ptt[0])+(ptt[1])+(1.-ptt[2])   # [1 1 0]
+        gr3d[nri[0]+1][nri[1]+1][nri[2]+1] += (ptt[0])+(ptt[1])+(ptt[2])    # [1 1 1]
+
+    nre = numpy.delete(nr,ngi,axis=0)  # get subset of those that contribute to edge
+    pte = numpy.delete(ptn,ngi,axis=0) # get subset of those that contribute to edge
+
+    for i in range(len(nre)): # loop over vectors at edge, total sum = 12
+        nri = nre[i]
+        ptt = pte[i]
 
         if(nri[0] > -1):
             if (nri[1] > -1):
@@ -346,6 +367,7 @@ def bingr3d(pt,np,bins,gr3d):
                     gr3d[nri[0]+1][nri[1]+1][nri[2]] += (ptt[0])+(ptt[1])+(1.-ptt[2])
                 if(nri[2] < np2[2]): # [1 1 1]
                     gr3d[nri[0]+1][nri[1]+1][nri[2]+1] += (ptt[0])+(ptt[1])+(ptt[2])
+
 #-----------------------------------------------------------
 def writedxfile(ofile,np,bins,gr3d,fact):
     #open file to write
@@ -368,10 +390,6 @@ def writedxfile(ofile,np,bins,gr3d,fact):
     for i in range(np[0]):
         for j in range(np[1]):
             for k in range(np[2]): 
-                #                if(i==np[0]-1 or j == np[1]-1 or k == np[1]-1 or i==0 or j==0 or k==0):
-                #                    f.write(str(gr3d[i][j][k]*fact*2.)+"\n") # scale first and last points by 2 (as they are on the ends...
-                #                else:
-                #                    f.write(str(gr3d[i][j][k]*fact)+"\n")
                 f.write(str(gr3d[i][j][k]*fact)+"\n")
                     
     f.write("\nobject density class field\n")
@@ -473,8 +491,8 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     
     for i in range(ntype1): # loop over all type 1 (Water Oxygens)
         ii = indx1[i]
-        getvect3atms(pos[ii],pos[ii+1],pos[ii+2],box,v)
-        #getvectwater(ii,pos,box,v) # get verticies of type1 molecule
+        #getvect3atms(pos[ii],pos[ii+1],pos[ii+2],box,v)
+        getvectwater(ii,pos,box,v) # get verticies of water (type1 molecule)
         
         ic = (pos[ii]/box*ncell).astype(int)  # ii cell index of type1
         #writevmd(ii,pos,v)
@@ -516,5 +534,5 @@ print("types1:",type1,"with ",ntype1,"molecules and type2",type2," with",ntype2)
 # save final dx file
 fact = 12*ntype1*ntype2*nconfig*bins[2]*bins[2]*bins[2]/(avol)  # normalize...
 writedxfile(outfile,np,bins,gr3d,1./fact)
-print("Grid min:max",numpy.amin(gr3d),":",numpy.amax(gr3d))
+print("Grid min:max",numpy.amin(gr3d)/fact,":",numpy.amax(gr3d)/fact)
 print("Done!")
