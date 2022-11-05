@@ -278,6 +278,19 @@ def getvectwater(ii,pos,box,v):  # assumes water is O,H,H in index
     v[1] = numpy.cross(v[2],v[0])
     v[1] /= numpy.linalg.norm(v[1])
 #------------------------------------------
+def getvect3atms(pos1,pos2,pos3,box,v):  # pos1 is origin
+    r1 = pos2-pos1 # z vector (from pos2 and pos1)
+    r2 = pos3-pos1 # x-y plane (from 
+    r1 -= numpy.floor(r1/box+.5)*box # periodic boundary
+    r2 -= numpy.floor(r2/box+.5)*box # periodic boundary
+    # get vectors that define molecular orientation
+    v[2] = r1 # z axis
+    v[2] /= numpy.linalg.norm(v[2])
+    v[1] = numpy.cross(r2,v[2]) # y axis
+    v[1] /= numpy.linalg.norm(v[1])
+    v[0] = numpy.cross(v[1],v[2])
+    v[0] /= numpy.linalg.norm(v[0]) # x-axis
+#------------------------------------------
 def writevmd(i,pos,v):
     if os.path.isfile("check.vmd"):
         f = open("check.vmd","a")
@@ -300,26 +313,39 @@ def writevmd(i,pos,v):
     f.close()
 #----------------------------
 def bingr3d(pt,np,bins,gr3d):
-    ptn = (pt-bins[0])/bins[2] # get bin numbers
-    nr = ptn.astype(int) # get integer numbers
+    ptn = pt[numpy.all(pt>(bins[0]-bins[2]),axis=1),:] # pull out only ones greater then -bin
+    ptn = ptn[numpy.all(ptn<(bins[1]+bins[2]),axis=1),:] # pull out only ones less then bin
+    ptn = (ptn-bins[0])/bins[2] # get bin numbers
+    nr = numpy.floor(ptn).astype(int) # get integer bin numbers
     ptn -= nr # get fraction of bin
-    #print(pt,ptn,nr)
-    for i in range(pt.shape[0]): # loop over points, total sum = 12
-        if (numpy.amax(nr[i]-np)<-1 and numpy.amin(nr[i])>-1): # in range?
-            ptt = ptn[i]
-            nri = nr[i]
-            gr3d[nri[0]][nri[1]][nri[2]] += (1.-ptt[0])+(1.-ptt[1])+(1.-ptt[2])
-    
-            gr3d[nri[0]+1][nri[1]][nri[2]] += (ptt[0])+(1.-ptt[1])+(1.-ptt[2])
-            gr3d[nri[0]][nri[1]+1][nri[2]] += (1.-ptt[0])+(ptt[1])+(1.-ptt[2])
-            gr3d[nri[0]][nri[1]][nri[2]+1] += (1.-ptt[0])+(1.-ptt[1])+(ptt[2])
-        
-            gr3d[nri[0]+1][nri[1]+1][nri[2]] += (ptt[0])+(ptt[1])+(1.-ptt[2])
-            gr3d[nri[0]+1][nri[1]][nri[2]+1] += (ptt[0])+(1.-ptt[1])+(ptt[2])
-            gr3d[nri[0]][nri[1]+1][nri[2]+1] += (1.-ptt[0])+(ptt[1])+(ptt[2])
-        
-            gr3d[nri[0]+1][nri[1]+1][nri[2]+1] += (ptt[0])+(ptt[1])+(ptt[2])
+    np2=np-1
+    for i in range(len(nr)): # loop over vectors, total sum = 12
+        nri = nr[i]
+        ptt = ptn[i]
 
+        if(nri[0] > -1):
+            if (nri[1] > -1):
+                if (nri[2] > -1): # [0 0 0]
+                    gr3d[nri[0]][nri[1]][nri[2]] += (1.-ptt[0])+(1.-ptt[1])+(1.-ptt[2])
+                if(nri[2] < np2[2]): # [0 0 1]
+                    gr3d[nri[0]][nri[1]][nri[2]+1] += (1.-ptt[0])+(1.-ptt[1])+(ptt[2])
+            if(nri[1] <np2[1]):
+                if(nri[2] > -1): #[0 1 0]
+                    gr3d[nri[0]][nri[1]+1][nri[2]] += (1.-ptt[0])+(ptt[1])+(1.-ptt[2])
+                if(nri[2] <np2[2]): #[0 1 1]
+                    gr3d[nri[0]][nri[1]+1][nri[2]+1] += (1.-ptt[0])+(ptt[1])+(ptt[2])
+
+        if (nri[0] < np2[0]):
+            if (nri[1] > -1):
+                if (nri[2] > -1): # [1 0 0]
+                    gr3d[nri[0]+1][nri[1]][nri[2]] += (ptt[0])+(1.-ptt[1])+(1.-ptt[2])
+                if (nri[2]<np2[2]): # [1 0 1]
+                    gr3d[nri[0]+1][nri[1]][nri[2]+1] += (ptt[0])+(1.-ptt[1])+(ptt[2])
+            if(nri[1]<np2[1]):
+                if(nri[2] > -1): # [1 1 0]
+                    gr3d[nri[0]+1][nri[1]+1][nri[2]] += (ptt[0])+(ptt[1])+(1.-ptt[2])
+                if(nri[2] < np2[2]): # [1 1 1]
+                    gr3d[nri[0]+1][nri[1]+1][nri[2]+1] += (ptt[0])+(ptt[1])+(ptt[2])
 #-----------------------------------------------------------
 def writedxfile(ofile,np,bins,gr3d,fact):
     #open file to write
@@ -339,14 +365,14 @@ def writedxfile(ofile,np,bins,gr3d,fact):
     hdr = "object 3 class array type double rank 0 items "+str(np[0]*np[1]*np[2])+" data follows\n"
     f.write(hdr)
     #write data
-    fact=1./oidx.size
     for i in range(np[0]):
         for j in range(np[1]):
             for k in range(np[2]): 
-                if(i==np[0]-1 or j == np[1]-1 or k == np[1]-1):
-                    f.write(str(gr3d[i][j][k]*fact*2.)+"\n") # scale last points by 2
-                else:
-                    f.write(str(gr3d[i][j][k]*fact)+"\n")
+                #                if(i==np[0]-1 or j == np[1]-1 or k == np[1]-1 or i==0 or j==0 or k==0):
+                #                    f.write(str(gr3d[i][j][k]*fact*2.)+"\n") # scale first and last points by 2 (as they are on the ends...
+                #                else:
+                #                    f.write(str(gr3d[i][j][k]*fact)+"\n")
+                f.write(str(gr3d[i][j][k]*fact)+"\n")
                     
     f.write("\nobject density class field\n")
     print("Wrote file",ofile)
@@ -371,7 +397,7 @@ outfile = args.output
 itime = args.time
 rmax = args.rmax
 rmin = -rmax
-otype = args.type1
+type1 = args.type1
 type2 = args.type2
 
 #Grids
@@ -379,7 +405,7 @@ np = numpy.array([nbins,nbins,nbins])
 bins = numpy.zeros(3)
 bins[0] = -rmax
 bins[1] = rmax
-bins[2] = 2.*rmax/(nbins-1) # should this be nbins?
+bins[2] = 2.*rmax/(nbins-1) # should this be nbins-1?
 
 print("Processing",configname,"to",outfile)
 natoms = getlammpsatoms(configname)
@@ -407,24 +433,24 @@ getlammpsatypes(configname,natoms,atypes)
 gr3d = numpy.zeros((np))
 #print(gr3d.shape,gr3d)
 
-oidx = numpy.where(atypes == otype)[0] # oxygen type index
+indx1 = numpy.where(atypes == type1)[0] # type1 index
 indx2 = numpy.where(atypes == type2)[0] # type2 index
-noxy = oidx.size
+ntype1 = indx1.size
 ntype2 = indx2.size
-print("Number of Otypes found = ",noxy,"Number of type 2 =",ntype2)
-print(oidx,indx2)
+print("Number of types 1 found = ",ntype1,"Number of type 2 =",ntype2)
+#print(indx1,indx2)
 
 # ngbr lists
 icell = numpy.zeros((natoms,3),dtype=int)
 ncell = numpy.array(box/rmax,dtype=int)
 ncells = numpy.product(ncell)
 cellngbr = getcellngbr(ncell)
-maxngbr = int(ntype2/ncells*1.5+10) # average density with a little padding
+maxngbr = int(ntype2/ncells*1.5+10)*2 # average density with a little padding
 cellatms = numpy.zeros((ncell[0],ncell[1],ncell[2],maxngbr),dtype=int)
 indl = numpy.zeros(maxngbr*27,dtype=int)
 print("Neighbor Cell:",ncell)
 
-v = numpy.zeros((3,3))
+v = numpy.array([[1.,0.,0.],[0.,1.,0.],[0.,0.,1.]])  # default unit vectors
 rpos = numpy.zeros((ntype2,3))
 
 f = open(configname,'r')
@@ -445,24 +471,26 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
     ngbr(box,pos2,icell,ncell,cellatms,maxngbr) # sort type 2 pos into cells
     ival = -1
     
-    for i in range(noxy): # loop over all type 1 (Water Oxygens)
-        ii = oidx[i]
-        getvectwater(ii,pos,box,v) # get verticies of water molecule
-        ic = (pos[ii]/box*ncell).astype(int)  # ii cell index
-        #print(i,noxy,ntype2,nconfig,ii,pos[ii],pos[ii+1],pos[ii+2])
+    for i in range(ntype1): # loop over all type 1 (Water Oxygens)
+        ii = indx1[i]
+        getvect3atms(pos[ii],pos[ii+1],pos[ii+2],box,v)
+        #getvectwater(ii,pos,box,v) # get verticies of type1 molecule
+        
+        ic = (pos[ii]/box*ncell).astype(int)  # ii cell index of type1
         #writevmd(ii,pos,v)
-        if(otype == type2):
+        if(type1 == type2): # get self index
             ivals = numpy.where(indx2==ii)
             if(len(ivals) !=1):
                 print("Error, found two of the same indices?",ii,indx2,ivals)
                 exit(1)
             ival = ivals[0]
             # print(ii,pos[ii],ival,pos2[ival])
-        ingbr = getngbrindx(ival,ic,ncell,cellatms,cellngbr,indl)#ngbr indxs of cell from pos2
+        ingbr = getngbrindx(ival,ic,ncell,cellatms,cellngbr,indl) #ngbr indxs of cell from pos2
         posn = numpy.take(pos2,indl[0:ingbr],axis=0) # position of neighbors
         rpos = posn-pos[ii] # distance between O and neighbors
         rpos -= numpy.floor(rpos/box+.5)*box # periodic boundary
         rpos = numpy.inner(rpos,v) # distance along each vecticies
+        # print(ii,ic,pos[ii],posn,rpos)
         bingr3d(rpos,np,bins,gr3d) # create density plot
 
         tnowi = time.time()
@@ -472,10 +500,10 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
             perdone = (fracO+nconfig-1)/nconf  # percent done of total
             etime = runtime/perdone # estimated total time
             avol = svol/nconfig     # average volume
-            print('otype = {}/{}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,noxy,nconfig,nconf,perdone,runtime,etime,avol))
+            print('ntype1 = {}/{}, configs = {}/{} ~ {:2.1%}, time={:g}/{:g}  <vol> = {}'.format(i,ntype1,nconfig,nconf,perdone,runtime,etime,avol))
             lgrid = (bins[2]) # length of grid box
             
-            fact = otype*ntype2*nconfig*bins[2]*bins[2]*bins[2]/(svol/nconfig*12.0)  # normalize... 12 is the grid points
+            fact = 12*ntype1*ntype2*nconfig*bins[2]*bins[2]*bins[2]/(svol/nconfig)  # normalize...(12 is for grid) 
             writedxfile(outfile,np,bins,gr3d,1./fact)  # save dx file
             #print(numpy.amin(gr3d)*fact,numpy.amax(gr3d)*fact)
             tnow = time.time() # reset time since saved
@@ -483,10 +511,10 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
 avol = svol/nconfig
 stdvol = math.sqrt((svol2/nconfig - avol*avol))
 print("# configs read in:",nconfig," <vol> =",avol, "stdvol = ",stdvol)
-print("Otypes:",otype,"with ",noxy,"molecules and type2",type2," with",ntype2)
+print("types1:",type1,"with ",ntype1,"molecules and type2",type2," with",ntype2)
 
 # save final dx file
-fact = otype*ntype2*nconfig*bins[2]*bins[2]*bins[2]/(avol*12.0)  # normalize... 12 is the grid points
+fact = 12*ntype1*ntype2*nconfig*bins[2]*bins[2]*bins[2]/(avol)  # normalize...
 writedxfile(outfile,np,bins,gr3d,1./fact)
-print("Grid min:max",numpy.amin(gr3d)*fact,":",numpy.amax(gr3d)*fact)
+print("Grid min:max",numpy.amin(gr3d),":",numpy.amax(gr3d))
 print("Done!")
