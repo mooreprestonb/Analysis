@@ -316,17 +316,17 @@ def bingr3d(pt,np,bins,gr3d):
     ptn = pt[numpy.all(pt>(bins[0]-bins[2]),axis=1),:] # pull out only ones greater then -bin
     ptn = ptn[numpy.all(ptn<(bins[1]+bins[2]),axis=1),:] # pull out only ones less then bin
     ptn = (ptn-bins[0])/bins[2] # get bin numbers
-    nr = numpy.floor(ptn).astype(int) # get integer bin numbers
+    nr = numpy.floor(ptn).astype(int) # get integer bin numbers (floor make sure -0.5 goes to -1)
     ptn -= nr # get fraction of bin
 
-    np2=np-1
+    np2=np-2
     ngi = numpy.where(numpy.all(nr>=0,axis=1) & numpy.all(nr<np2,axis=1)==True)[0] #index of cells in range
     nre = numpy.take(nr,ngi,axis=0)   # get subset of those within
     pte = numpy.take(ptn,ngi,axis=0)  # get subset of those within
 
     for i in range(len(nre)): # loop over vectors in range, total sum = 12
-        nri = nre[i]
-        ptt = pte[i]
+        nri = nre[i] # local cell index
+        ptt = pte[i] # local points to bin into grid
 
         gr3d[nri[0]][nri[1]][nri[2]] += (1.-ptt[0])+(1.-ptt[1])+(1.-ptt[2]) # [0 0 0] 
         gr3d[nri[0]][nri[1]][nri[2]+1] += (1.-ptt[0])+(1.-ptt[1])+(ptt[2])  # [0 0 1]
@@ -374,7 +374,7 @@ def writedxfile(ofile,np,bins,gr3d,fact):
     # print("Creating file :",ofile)
     f = open(ofile,"w")
     #print header
-    hdr = "# opendx file for testing with 3dgr\n"
+    hdr = "# opendx file for 3dgr"
     f.write(hdr)
     hdr = "object 1 class gridpositions counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
     f.write(hdr)
@@ -393,6 +393,7 @@ def writedxfile(ofile,np,bins,gr3d,fact):
                 f.write(str(gr3d[i][j][k]*fact)+"\n")
                     
     f.write("\nobject density class field\n")
+    f.close()
     print("Wrote file",ofile)
 
 #------------------------------------------------------------
