@@ -60,34 +60,63 @@ def getlammpsnconf(configname,natoms):
 def getlammpstypes(configname,natoms): # find # types in lammps traj
     types={}
     f = open(configname,'r')
-    for i in range(9): # readover header
-        lines = f.readline()
 
-#    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
+    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
+
+    for i in range(9): # readover header
+        line = f.readline()
+    if (line.rstrip() == "ITEM: ATOMS id type xs ys zs"):
+        ibox = 1
+    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"): # unscalled coord
+        ibox = 2
+    elif (line.rstrip() == "ITEM: ATOMS element x y z"): # unscalled w/ element
+        ibox = 3
+    else:
+        print("ERROR! 9th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
+        print("\"ITEM: ATOMS id type x y z ix iy iz\" or ")
+        print("\"ITEM: ATOMS element x y z\"")
+        exit(1)
 
     for i in range(natoms): # readover header
-        ntype = int(f.readline().split()[1]) # get atom type
-#        ttype = f.readline().split()[0]
-#        ntype = atyped[ttype]
-        # print(ttype,ntype)
-        if ntype in types: # add types 
-            types[ntype] += 1
+        if(ibox == 3): # atoms identified by elements
+            ttype = f.readline().split()[0]
+            ntype = atyped[ttype]
+            # print(ttype,ntype)
+        else: # atoms identified by id and type (scalled or unscalled)
+            ntype = int(f.readline().split()[1]) # get atom type
+        if ntype in types: 
+            types[ntype] += 1 # add to types
         else :
-            types[ntype] = 1
+            types[ntype] = 1 # add types if doesn't exist 
     f.close()
     return types
 #------------------------------------------------------------ 
 def getlammpsatypes(configname,natoms,atypes): # find type of each atom in lammps traj first config
     f = open(configname,'r')
+
+    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
     for i in range(9): # readover header
-        lines = f.readline()
-#    atyped = {"O":1,"H":2,"Na":3,"Cl":4,"He":5}
-    for i in range(natoms): # readover  header
+        line = f.readline()
+    if (line.rstrip() == "ITEM: ATOMS id type xs ys zs"):
+        ibox = 1
+    elif (line.rstrip() == "ITEM: ATOMS id type x y z ix iy iz"): # unscalled coord
+        ibox = 2
+    elif (line.rstrip() == "ITEM: ATOMS element x y z"): # unscalled w/ element
+        ibox = 3
+    else:
+        print("ERROR! 9th line not \n\"ITEM: ATOMS id type xs ys zs\" or ")
+        print("\"ITEM: ATOMS id type x y z ix iy iz\" or ")
+        print("\"ITEM: ATOMS element x y z\"")
+        exit(1)
+
+    for i in range(natoms): # loop over atoms
         words = f.readline().split()
-        indx = int(words[0])-1 # atom index
-        itype = int(words[1]) # get atom type
-        atypes[indx] = itype
-#        atypes[i] = atyped[words[0]]
+        if(ibox == 3):
+            atypes[i] = atyped[words[0]] # if type is elements
+        else :
+            indx = int(words[0])-1 # atom index
+            itype = int(words[1]) # get atom type
+            atypes[indx] = itype  # if type is numbers
     f.close()
 #------------------------------------------------------------ 
 def getlammpsatoms(configname): # find # atoms in lammps header
@@ -319,7 +348,7 @@ def bingr3d(pt,np,bins,gr3d):
     nr = numpy.floor(ptn).astype(int) # get integer bin numbers (floor make sure -0.5 goes to -1)
     ptn -= nr # get fraction of bin
 
-    np2=np-2
+    np2=np-1 # cut off of points indices  
     ngi = numpy.where(numpy.all(nr>=0,axis=1) & numpy.all(nr<np2,axis=1)==True)[0] #index of cells in range
     nre = numpy.take(nr,ngi,axis=0)   # get subset of those within
     pte = numpy.take(ptn,ngi,axis=0)  # get subset of those within
@@ -374,7 +403,7 @@ def writedxfile(ofile,np,bins,gr3d,fact):
     # print("Creating file :",ofile)
     f = open(ofile,"w")
     #print header
-    hdr = "# opendx file for 3dgr"
+    hdr = "# opendx file for 3dgr\n"
     f.write(hdr)
     hdr = "object 1 class gridpositions counts "+str(np[0])+" "+str(np[1])+" "+str(np[2])+"\n"
     f.write(hdr)
@@ -515,7 +544,7 @@ while(readconfig(f,natoms,box,pos,atypes,nconfig)):
         tnowi = time.time()
         if(itime < tnowi-tnow):
             runtime = tnowi-ttime   # total time run
-            fracO = i/ntype2          # fraction of atoms processes in this config
+            fracO = i/ntype1          # fraction of atoms processes in this config
             perdone = (fracO+nconfig-1)/nconf  # percent done of total
             etime = runtime/perdone # estimated total time
             avol = svol/nconfig     # average volume
